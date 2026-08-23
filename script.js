@@ -58,6 +58,26 @@
   // "Setting Up the Shared AI Proxy" section in README.md.
   var PKDSPT_PROXY_URL = "https://dmtac-ai-proxy.kksjpkdspt.workers.dev";
 
+  // ---------------------------------------------------------------------
+  // BUILT-IN SHARED ACCESS CODE
+  //
+  // Put the Cloudflare Worker's AI_ACCESS_CODE here so pharmacists never
+  // have to type it. When this is set, the access-code box is hidden and
+  // filled automatically for the "PKD SPT Shared Gemini" provider.
+  //
+  // BE AWARE: this file is served publicly. Anyone who views the page
+  // source can read this value and send requests that spend the DMTAC
+  // lead's Gemini quota. Because of that, this code is a convenience
+  // marker, NOT a security control. Protect the account instead:
+  //   - set a hard spend cap on the Google Cloud billing account
+  //   - keep RATE_LIMIT_PER_MIN low in the Worker
+  //   - rotate this value (here + in Cloudflare) if usage looks odd
+  //
+  // Leave it as "" to go back to pharmacists typing the code themselves.
+  // ---------------------------------------------------------------------
+  var PKDSPT_BUILTIN_ACCESS_CODE = "AQ.Ab8RN6KBDg-CIBH7xy58_bNOSD268DJBNuMtYTRLGzJtUgJRBQ
+";
+
   function collectAiFieldSchema() {
     var fields = document.querySelectorAll('main input[type="text"], main input[type="number"], main textarea');
     var schema = [];
@@ -175,6 +195,45 @@
     });
   }
 
+  // Google advises exponential backoff with jitter for 503 "model is
+  // overloaded" - it is a capacity signal, not a quota or auth problem, and
+  // usually clears on the next attempt. 429/500/502/504 get the same
+  // treatment. 401/403 are NOT retried: those are our own gates and a retry
+  // would never change the answer.
+  var AI_RETRY_STATUSES = [429, 500, 502, 503, 504];
+  var AI_RETRY_MAX = 3;
+
+  // If the chosen model stays overloaded after its retries, drop to an
+  // older, less contended one rather than failing the pharmacist outright.
+  // Newest models see the most demand, so the fallback is deliberately a
+  // previous generation.
+  var AI_MODEL_FALLBACKS = {
+    "gemini-3.7-flash": "gemini-3.6-flash",
+    "gemini-3.6-flash": "gemini-2.5-flash"
+  };
+
+  function isRetryableAiError(err) {
+    return !!(err && err.retryStatus && AI_RETRY_STATUSES.indexOf(err.retryStatus) !== -1);
+  }
+
+  function aiRetryDelayMs(attempt) {
+    var base = 800 * Math.pow(2, attempt);        // 800, 1600, 3200
+    return Math.round(base + Math.random() * 400); // + jitter
+  }
+
+  function withAiRetry(makeCall, onRetry) {
+    function attemptOnce(attempt) {
+      return makeCall().catch(function (err) {
+        if (attempt >= AI_RETRY_MAX - 1 || !isRetryableAiError(err)) throw err;
+        var wait = aiRetryDelayMs(attempt);
+        if (onRetry) onRetry(attempt + 1, AI_RETRY_MAX, wait, err);
+        return new Promise(function (resolve) { setTimeout(resolve, wait); })
+          .then(function () { return attemptOnce(attempt + 1); });
+      });
+    }
+    return attemptOnce(0);
+  }
+
   function callPkdsptProxyApi(accessCode, model, prompt) {
     if (!PKDSPT_PROXY_URL || PKDSPT_PROXY_URL.indexOf("YOUR-SUBDOMAIN") !== -1) {
       return Promise.reject(new Error("Shared Gemini proxy hasn't been set up yet. Ask your DMTAC lead, or switch to a provider you have your own API key for."));
@@ -187,7 +246,9 @@
       return res.json().then(function (data) {
         if (!res.ok) {
           var msg = data && data.error ? data.error : "Proxy error";
-          throw new Error(msg + " (" + res.status + ")" + (res.status === 401 ? " - check the access code with your DMTAC lead." : ""));
+          var e = new Error(msg + " (" + res.status + ")" + (res.status === 401 ? " - check the access code with your DMTAC lead." : ""));
+          e.retryStatus = res.status;
+          throw e;
         }
         return data;
       });
@@ -218,9 +279,20 @@
     var labelText = document.getElementById("aiApiKeyLabelText");
     var input = document.getElementById("aiApiKey");
     var hint = document.getElementById("aiApiKeyHint");
+    var codeRow = input.closest(".field") || input.parentElement;
+    if (provider === "pkdspt-shared" && PKDSPT_BUILTIN_ACCESS_CODE) {
+      // Code is built into the app - pharmacists never type it.
+      input.value = PKDSPT_BUILTIN_ACCESS_CODE;
+      if (codeRow) codeRow.style.display = "none";
+      hint.style.display = "";
+      hint.innerHTML = "Ready to use — no access code needed. This uses a shared Gemini proxy set up by your DMTAC lead. Your dictation text is sent to the proxy, then to Google Gemini, using the lead's account.";
+      return;
+    }
+    if (codeRow) codeRow.style.display = "";
     if (provider === "pkdspt-shared") {
       labelText.textContent = "Access code (ask your DMTAC lead for this — not a personal API key)";
       input.placeholder = "Enter the shared access code";
+      input.setAttribute("autocomplete", "off");
       hint.innerHTML = "This option uses a shared Gemini proxy set up by your DMTAC lead, so you don't need your own API key — just ask them for the access code. Your dictation text is sent to the proxy, then to Google Gemini, using the lead's account.";
     } else {
       labelText.textContent = "Your own API key (kept only in this browser tab for this session — never saved to disk, never stored in this site's code)";
@@ -235,8 +307,11 @@
 
     btn.addEventListener("click", function () {
       var narrative = document.getElementById("aiDictationBox").value.trim();
-      var apiKey = document.getElementById("aiApiKey").value.trim();
       var provider = document.getElementById("aiProvider").value;
+      var apiKey = document.getElementById("aiApiKey").value.trim();
+      if (provider === "pkdspt-shared" && PKDSPT_BUILTIN_ACCESS_CODE) {
+        apiKey = PKDSPT_BUILTIN_ACCESS_CODE;
+      }
       var model = document.getElementById("aiModel").value.trim();
       var overwrite = document.getElementById("aiOverwriteExisting").checked;
 
@@ -257,17 +332,41 @@
       status.textContent = "Sending to " + (providerNames[provider] || provider) + "... this calls an external service.";
 
       var call;
+      var usedFallbackModel = null;
       if (provider === "anthropic") call = callAnthropicApi(apiKey, model, prompt);
       else if (provider === "gemini") call = callGeminiApi(apiKey, model, prompt);
-      else if (provider === "pkdspt-shared") call = callPkdsptProxyApi(apiKey, model, prompt);
+      else if (provider === "pkdspt-shared") {
+        call = withAiRetry(function () {
+          return callPkdsptProxyApi(apiKey, model, prompt);
+        }, function (attempt, max, wait) {
+          status.textContent = "Google's servers are busy (503). Retrying " +
+            attempt + " of " + (max - 1) + " in " + Math.round(wait / 100) / 10 + "s...";
+        }).catch(function (err) {
+          var alt = AI_MODEL_FALLBACKS[model];
+          if (!alt || !isRetryableAiError(err)) throw err;
+          status.textContent = model + " is still overloaded — trying " + alt + " instead...";
+          return withAiRetry(function () {
+            return callPkdsptProxyApi(apiKey, alt, prompt);
+          }).then(function (r) {
+            usedFallbackModel = alt;
+            return r;
+          });
+        });
+      }
       else call = callOpenAiApi(apiKey, model, prompt);
 
       call.then(function (resultObj) {
         var filled = fillFieldsFromAiResult(resultObj, overwrite);
-        status.textContent = "Done - filled " + filled + " field(s). Review everything before generating the note.";
+        status.textContent = "Done - filled " + filled + " field(s)." +
+          (usedFallbackModel ? " (used " + usedFallbackModel + " — the newer model was overloaded)" : "") +
+          " Review everything before generating the note.";
       }).catch(function (err) {
         var msg = err && err.message ? err.message : String(err);
-        if (msg.indexOf("Failed to fetch") !== -1 || msg.indexOf("NetworkError") !== -1) {
+        if (msg.indexOf("(503)") !== -1) {
+          msg = "Google Gemini is overloaded right now (503) — tried " + AI_RETRY_MAX +
+                " times. This is capacity on Google's side, not your access code or quota. " +
+                "Wait a minute and try again, or fill the fields manually below.";
+        } else if (msg.indexOf("Failed to fetch") !== -1 || msg.indexOf("NetworkError") !== -1) {
           msg += " (Likely blocked by the browser/provider - CORS restrictions apply, especially for OpenAI called directly from a browser.)";
         }
         status.textContent = "Error: " + msg;
@@ -4763,8 +4862,8 @@
       var defaults = {
         anthropic: "claude-3-5-sonnet-20241022",
         openai: "gpt-4o-mini",
-        gemini: "gemini-3.7-flash",
-        "pkdspt-shared": "gemini-3.7-flash"
+        gemini: "gemini-3.6-flash",
+        "pkdspt-shared": "gemini-3.6-flash"
       };
       modelField.value = defaults[this.value] || "";
       updateAiKeyLabelForProvider(this.value);
