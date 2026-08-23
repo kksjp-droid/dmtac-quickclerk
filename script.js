@@ -75,8 +75,7 @@
   //
   // Leave it as "" to go back to pharmacists typing the code themselves.
   // ---------------------------------------------------------------------
-  var PKDSPT_BUILTIN_ACCESS_CODE = "AQ.Ab8RN6LId8VcKBojPFTcA0pMHRMReo0rh6kzkqvyrQnYoO_GnQ
-";
+  var PKDSPT_BUILTIN_ACCESS_CODE = "dmtac2026";
 
   function collectAiFieldSchema() {
     var fields = document.querySelectorAll('main input[type="text"], main input[type="number"], main textarea');
