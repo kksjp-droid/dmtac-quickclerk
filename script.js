@@ -4861,8 +4861,8 @@
       var defaults = {
         anthropic: "claude-3-5-sonnet-20241022",
         openai: "gpt-4o-mini",
-        gemini: "gemini-3.6-flash",
-        "pkdspt-shared": "gemini-3.6-flash"
+        gemini: "gemini-3.7-flash",
+        "pkdspt-shared": "gemini-3.7-flash"
       };
       modelField.value = defaults[this.value] || "";
       updateAiKeyLabelForProvider(this.value);
