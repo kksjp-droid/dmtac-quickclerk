@@ -1,0 +1,1014 @@
+/* =====================================================================
+   DMTAC QuickClerk — design tokens
+   One teal-blue brand ramp plus a small semantic set. Every colour used
+   anywhere in the app resolves to a token here, so the palette can be
+   retuned in one place without touching component rules.
+   ===================================================================== */
+:root {
+  /* Brand ramp (teal-blue) */
+  --blue-50:  #eff6f9;
+  --blue-100: #dbe9f0;
+  --blue-200: #b9d3df;
+  --blue-300: #8ab6c9;
+  --blue-400: #4d8ba5;
+  --blue: #1a5f7a;
+  --blue-dark: #0f3f52;
+  --blue-900: #0a2e3d;
+
+  /* Neutrals */
+  --bg: #eef2f4;
+  --card-bg: #ffffff;
+  --border: #d7e0e3;
+  --border-soft: #e7edef;
+  --text: #23343a;
+  --muted: #6b7c82;
+
+  /* Semantic */
+  --warn-bg: #fff3cd;
+  --warn-border: #f0c36d;
+  --warn-text: #7a5600;
+  --danger: #b3261e;
+  --danger-bg: #fdecea;
+  --good: #2e7d32;
+  --good-bg: #e8f5e9;
+  --accent: #b06d00;          /* calculators / derived values */
+  --accent-bg: #fdf6e9;
+
+  /* Elevation + geometry */
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(16, 45, 58, 0.05);
+  --shadow: 0 2px 6px rgba(16, 45, 58, 0.07);
+  --shadow-lg: 0 6px 20px rgba(16, 45, 58, 0.10);
+
+  /* Rhythm */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 22px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.app-header {
+  background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue) 55%, #17708f 100%);
+  color: #fff;
+  padding: 20px 24px;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+}
+
+.app-header::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), #e0b25c, var(--blue-300));
+}
+
+.app-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.app-logo-badge {
+  background: #fff;
+  border-radius: 10px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.app-logo {
+  display: block;
+  height: 40px;
+  width: auto;
+}
+
+.app-header-text {
+  min-width: 0;
+}
+
+.app-header h1 {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+}
+
+.subtitle {
+  margin: 0 0 6px 0;
+  color: #cfe3ea;
+  font-size: 13px;
+}
+
+.warning-banner {
+  background: var(--warn-bg);
+  color: #6b4c00;
+  border: 1px solid var(--warn-border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+main {
+  max-width: 960px;
+  margin: 20px auto;
+  padding: 0 16px 60px 16px;
+}
+
+/* ---------------------------------------------------------------------
+   Cards. Each top-level section reads as a distinct sheet: a tinted
+   header band with a brand keyline, then the fields on white.
+   --------------------------------------------------------------------- */
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0 0 var(--sp-4) 0;
+  margin-bottom: var(--sp-5);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.card > *:not(h2) {
+  margin-left: var(--sp-5);
+  margin-right: var(--sp-5);
+}
+
+.card h2 {
+  margin: 0 0 var(--sp-4) 0;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--blue-dark);
+  background: linear-gradient(180deg, var(--blue-50), var(--blue-100));
+  border-bottom: 1px solid var(--blue-200);
+  border-left: 5px solid var(--blue);
+  padding: 12px var(--sp-5);
+}
+
+/* Numbered subsections get a soft rule and a step marker so the 1-10
+   Pharmacotherapy Review sequence is scannable at a glance. */
+.subsection {
+  border-top: 1px solid var(--border-soft);
+  padding-top: var(--sp-4);
+  margin-top: var(--sp-4);
+}
+
+.subsection h3 {
+  margin: 0 0 var(--sp-2) 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--blue-dark);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.subsection h3::before {
+  content: "";
+  width: 4px;
+  height: 15px;
+  border-radius: 2px;
+  background: var(--blue-400);
+  flex: 0 0 auto;
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+input[type="text"], input[type="number"], input[type="password"], select, textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-top: var(--sp-1);
+  resize: vertical;
+  background: #fff;
+  color: var(--text);
+  transition: border-color .12s, box-shadow .12s;
+}
+
+input[type="text"]:hover, input[type="number"]:hover, select:hover, textarea:hover {
+  border-color: var(--blue-300);
+}
+
+input[type="text"]:focus, input[type="number"]:focus, input[type="password"]:focus,
+select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(26, 95, 122, 0.14);
+}
+
+/* Visible keyboard focus for every interactive control (accessibility). */
+button:focus-visible, input:focus-visible, select:focus-visible,
+textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+::placeholder { color: #9fb0b6; }
+
+textarea:focus, input:focus, select:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+.grid {
+  display: grid;
+  gap: 12px;
+}
+
+.grid-2 { grid-template-columns: 1fr 1fr; }
+.grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.grid .full { grid-column: 1 / -1; }
+
+@media (max-width: 640px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+
+/* ---------------------------------------------------------------------
+   Touch/tablet sizing. On coarse pointers (iPad, Android tablet, phone)
+   inputs get 16px text - below 16px iOS Safari zooms the page in on focus,
+   which is disorienting mid-clerking - plus taller hit areas and larger
+   checkboxes, which are otherwise ~13px and easy to miss with a finger.
+   --------------------------------------------------------------------- */
+@media (pointer: coarse) {
+  input[type="text"], input[type="number"], input[type="password"], select, textarea {
+    font-size: 16px;
+    padding: 10px 11px;
+    min-height: 42px;
+  }
+
+  input[type="checkbox"], input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+  }
+
+  .audit-item {
+    padding: 7px 0;
+    font-size: 13.5px;
+  }
+
+  .mic-btn, .secondary-btn, .primary-btn, .danger-btn, .score-btn, .dose-add-btn {
+    min-height: 42px;
+  }
+
+  .phrase-btn {
+    min-height: 40px;
+    padding: 10px 15px;
+    font-size: 13.5px;
+  }
+
+  .myMaat-module summary, .ref-accordion summary {
+    min-height: 44px;
+    font-size: 13.5px;
+  }
+}
+
+.field-with-dictate {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.field-with-dictate textarea, .field-with-dictate input {
+  flex: 1;
+}
+
+.mic-btn {
+  flex-shrink: 0;
+  background: #eaf2f4;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.mic-btn.recording {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}
+
+.phrase-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 4px 0;
+}
+
+.dose-picker-group {
+  margin: 6px 0 10px 0;
+}
+
+.dose-picker-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.dose-drug-label {
+  font-weight: 600;
+  font-size: 13px;
+  min-width: 130px;
+}
+
+.dose-select {
+  width: auto;
+  min-width: 110px;
+  flex: 0 0 auto;
+}
+
+/* Phrase-bank chips are the main "reduce typing" control, so they are sized
+   as proper touch targets (min 34px tall) for iPad/tablet use rather than
+   mouse-sized chips. */
+.phrase-btn {
+  background: #eef5f0;
+  border: 1px solid #cfe3d6;
+  color: #245c3b;
+  border-radius: 16px;
+  padding: 8px 13px;
+  font-size: 12.5px;
+  line-height: 1.25;
+  min-height: 34px;
+  cursor: pointer;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.phrase-btn:hover {
+  background: #dcefe2;
+}
+
+.phrase-btn:active {
+  background: #bfe0cb;
+  transform: scale(0.97);
+}
+
+.myMaat-module {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  background: #fafcfc;
+}
+
+.myMaat-module summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--blue-dark);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+  margin: 6px 0;
+}
+
+.voice-score-entry {
+  margin: 10px 0;
+}
+
+.warning-text {
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 16px;
+}
+
+.myMaat-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0;
+}
+
+.myMaat-li {
+  padding: 6px 0;
+  border-bottom: 1px solid #eef1f2;
+}
+
+.myMaat-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.myMaat-question-langs {
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: #f7fafb;
+  border-left: 3px solid var(--blue);
+  border-radius: 3px;
+  font-size: 12px;
+  color: #445;
+  line-height: 1.6;
+}
+
+.myMaat-question-langs .lang-tag {
+  display: inline-block;
+  min-width: 22px;
+  font-weight: 700;
+  font-size: 10px;
+  color: var(--blue-dark);
+}
+
+.myMaat-item .item-label {
+  flex: 1 1 260px;
+}
+
+.score-btn {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.score-btn.selected {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+
+/* Derived/計算 output boxes share one amber "this is calculated, not typed"
+   treatment so a pharmacist can tell computed values from entered ones. */
+.myMaat-summary-box {
+  background: var(--accent-bg);
+  border: 1px solid #eddcb8;
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-top: 10px;
+}
+
+.myMaat-summary-box p {
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+.audit-group {
+  margin: 10px 0;
+}
+
+.audit-group h4 {
+  margin: 10px 0 4px 0;
+  font-size: 12.5px;
+  color: var(--blue-dark);
+}
+
+.audit-item {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 400;
+  padding: 2px 0;
+}
+
+.audit-item input {
+  margin-right: 6px;
+}
+
+.button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.primary-btn {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary-btn:hover { background: var(--blue-dark); }
+
+.primary-btn:disabled {
+  background: #a9b7bb;
+  cursor: not-allowed;
+}
+
+.secondary-btn {
+  background: #eaf2f4;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.danger-btn {
+  background: #fff;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.danger-btn:hover { background: #fdecea; }
+
+#noteOutput {
+  width: 100%;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 12.5px;
+  background: #fbfcfc;
+}
+
+.checklist {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+}
+
+.checklist li {
+  padding: 4px 0;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.checklist input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.lock-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--blue-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.lock-overlay.unlocked {
+  display: none;
+}
+
+.lock-box {
+  background: #fff;
+  border-radius: 10px;
+  padding: 28px 30px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.lock-logo {
+  display: block;
+  height: 56px;
+  width: auto;
+  margin: 0 auto 12px auto;
+}
+
+.lock-box h2 {
+  margin: 0 0 8px 0;
+  color: var(--blue-dark);
+  font-size: 18px;
+}
+
+.lock-box input[type="password"] {
+  text-align: center;
+  margin: 12px 0;
+}
+
+.lock-box .primary-btn {
+  width: 100%;
+}
+
+footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 20px;
+}
+
+/* ---------------------------------------------------------------------
+   CKD heat map (KDIGO G stage x A stage risk grid). Colours match the
+   standard KDIGO 2012/2026-update CGA heat map: green = low risk, yellow =
+   moderately increased, orange = high, red = very high.
+   --------------------------------------------------------------------- */
+.ckd-heatmap {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  margin: 6px 0;
+}
+
+.ckd-heatmap th, .ckd-heatmap td {
+  border: 1px solid #fff;
+  padding: 6px 4px;
+  text-align: center;
+}
+
+.ckd-heatmap thead th {
+  background: var(--blue-dark);
+  color: #fff;
+  font-weight: 600;
+  font-size: 10.5px;
+}
+
+.ckd-heatmap tbody th {
+  background: #eef3f4;
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  font-size: 10.5px;
+}
+
+.ckd-heatmap td { height: 26px; }
+
+.risk-low { background: #6fbf73; }
+.risk-mod { background: #ffd54f; }
+.risk-high { background: #ff9800; }
+.risk-veryhigh { background: #e53935; }
+
+.ckd-heatmap td.active-cell {
+  outline: 3px solid var(--blue-dark);
+  outline-offset: -3px;
+  position: relative;
+}
+
+.ckd-heatmap td.active-cell::after {
+  content: "\25CF";
+  color: #fff;
+  font-size: 14px;
+  text-shadow: 0 0 2px #000;
+}
+
+.heatmap-legend-swatch {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
+/* ---------------------------------------------------------------------
+   Collapsed reference accordions - keeps long guideline reference text
+   available but out of the way, so the form stays short on a tablet.
+   --------------------------------------------------------------------- */
+.ref-accordion {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fbfdfd;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.ref-accordion summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue-dark);
+  padding: 8px 10px;
+  list-style: none;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+}
+
+.ref-accordion summary::-webkit-details-marker { display: none; }
+
+.ref-accordion summary::before {
+  content: "\25B8";
+  margin-right: 6px;
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.ref-accordion[open] summary::before { content: "\25BE"; }
+
+.ref-accordion .hint {
+  padding: 0 10px 10px 10px;
+  margin: 0;
+}
+
+.ref-accordion-group {
+  margin: 8px 0 4px 0;
+}
+
+.ref-accordion-group > p.hint {
+  margin: 0 0 4px 0;
+  font-weight: 600;
+  color: var(--blue-dark);
+}
+
+/* ---------------------------------------------------------------------
+   Inline audit groups. The PHIS audit items used to sit in one collapsed
+   block at the end of the Pharmacotherapy Review, which was easy to skip.
+   Each group now sits, always visible, directly under the clinical section
+   it belongs to, tinted so it reads as an audit strip rather than as more
+   clinical fields.
+   --------------------------------------------------------------------- */
+.audit-inline {
+  border: 1px solid #d6e2ea;
+  border-left: 4px solid var(--blue);
+  border-radius: 6px;
+  background: #f4f9fb;
+  padding: 8px 12px;
+  margin: 10px 0 4px 0;
+}
+
+.audit-inline h4 {
+  margin: 0 0 2px 0;
+  font-size: 12.5px;
+  color: var(--blue-dark);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-count {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 2px 8px;
+  background: #dbe7ee;
+  color: var(--blue-dark);
+}
+
+.audit-count-none {
+  background: var(--warn-bg);
+  color: #8a6100;
+  border: 1px solid var(--warn-border);
+}
+
+.audit-count-done {
+  background: #d9f0dc;
+  color: #1d6626;
+  border: 1px solid #a6d7ae;
+}
+
+.ckd-flag-box {
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6b4a00;
+}
+
+/* =====================================================================
+   PRINT STYLESHEET
+   Goal: a clean paper record of what was actually filled in, not a
+   screenshot of the app. Interactive scaffolding (phrase chips, mic
+   buttons, calculators' reset buttons, the AI panel, the lock screen)
+   is dropped; every collapsed <details> is forced open so nothing that
+   was recorded is hidden on paper; colours flatten to ink-friendly
+   greys while the audit/warning bands keep a visible border.
+   ===================================================================== */
+@media print {
+  @page { margin: 12mm 10mm; }
+
+  html, body {
+    background: #fff !important;
+    color: #000;
+    font-size: 10.5pt;
+  }
+
+  /* Chrome/Safari: keep the few colours that carry meaning. */
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* --- drop interactive-only furniture --- */
+  .phrase-bank,
+  .dose-picker-group,
+  .mic-btn,
+  .button-row,
+  .secondary-btn,
+  .primary-btn,
+  .danger-btn,
+  #aiPanel,
+  #lockScreen,
+  .heatmap-legend-swatch,
+  #copyStatus,
+  #dictationSupportNote,
+  .score-btn {
+    display: none !important;
+  }
+
+  /* The generated-note textarea is the thing worth printing from the
+     output card; the rest of that card is buttons. */
+  #noteOutput {
+    border: 1px solid #999 !important;
+    height: auto !important;
+    min-height: 0;
+    white-space: pre-wrap;
+    font-size: 9.5pt;
+  }
+
+  /* --- reveal everything that was collapsed --- */
+  details { display: block !important; }
+  details > summary {
+    list-style: none;
+    font-weight: 700;
+    page-break-after: avoid;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+  details:not([open]) > *:not(summary) { display: revert !important; }
+  details > *:not(summary) { display: revert !important; }
+
+  /* Reference accordions are guideline text, not patient data — printing
+     them would add pages of boilerplate to every record. */
+  .ref-accordion { display: none !important; }
+
+  /* --- flatten the chrome --- */
+  .app-header {
+    background: none !important;
+    color: #000;
+    padding: 0 0 6pt 0;
+    box-shadow: none;
+    border-bottom: 2pt solid #000;
+  }
+  .app-header::after { display: none; }
+  .app-header h1 { font-size: 15pt; }
+  .app-logo { height: 30px; }
+
+  .card {
+    box-shadow: none !important;
+    border: 1pt solid #bbb !important;
+    border-radius: 0;
+    margin-bottom: 8pt;
+    padding-bottom: 6pt;
+    page-break-inside: avoid;
+  }
+  .card h2 {
+    background: #eee !important;
+    border-left: 3pt solid #000;
+    border-bottom: 1pt solid #bbb;
+    color: #000;
+    font-size: 11pt;
+    padding: 5pt 8pt;
+    page-break-after: avoid;
+  }
+  .card > *:not(h2) { margin-left: 8pt; margin-right: 8pt; }
+
+  .subsection { border-top: 1pt dotted #bbb; padding-top: 6pt; margin-top: 6pt; page-break-inside: avoid; }
+  .subsection h3 { color: #000; font-size: 10.5pt; page-break-after: avoid; }
+  .subsection h3::before { background: #000; }
+
+  label { margin-bottom: 5pt; font-size: 9.5pt; }
+
+  /* Inputs print as ruled lines rather than boxes. */
+  input[type="text"], input[type="number"], select, textarea {
+    border: none !important;
+    border-bottom: 0.75pt solid #666 !important;
+    border-radius: 0 !important;
+    padding: 1pt 2pt !important;
+    min-height: 0 !important;
+    font-size: 9.5pt;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  textarea { border: 0.75pt solid #999 !important; }
+
+  /* Ticked audit items must be unmistakable in ink. */
+  input[type="checkbox"], input[type="radio"] {
+    width: 10pt; height: 10pt;
+    -webkit-appearance: none; appearance: none;
+    border: 0.75pt solid #000;
+    vertical-align: -1pt;
+    margin-right: 4pt;
+  }
+  input[type="radio"] { border-radius: 50%; }
+  input[type="checkbox"]:checked::after {
+    content: "\2713";
+    display: block;
+    font-size: 9pt;
+    line-height: 9pt;
+    text-align: center;
+    font-weight: 700;
+  }
+  input[type="radio"]:checked { background: #000; }
+
+  .audit-inline {
+    background: #f6f6f6 !important;
+    border: 0.75pt solid #999 !important;
+    border-left: 2.5pt solid #000 !important;
+    page-break-inside: avoid;
+  }
+  .audit-inline h4 { font-size: 9.5pt; }
+  .audit-count { border: 0.5pt solid #666; background: #fff !important; color: #000 !important; }
+  .audit-item { font-size: 9pt; padding: 1pt 0; }
+
+  /* Calculated-output and alert boxes keep a visible edge. */
+  .myMaat-summary-box,
+  .ckd-flag-box {
+    background: #f9f9f9 !important;
+    border: 0.75pt solid #666 !important;
+    border-left: 2.5pt solid #000 !important;
+    page-break-inside: avoid;
+  }
+
+  /* The CKD heat map is meaningless without its colours — keep them. */
+  .ckd-heatmap { page-break-inside: avoid; }
+  .ckd-heatmap td.active-cell { outline: 2pt solid #000 !important; }
+
+  .hint { color: #444; font-size: 8.5pt; }
+
+  footer { border-top: 0.75pt solid #999; margin-top: 8pt; font-size: 8pt; }
+
+  /* Signature strip appended on paper only — ADAF F1.2 / SENARAI 4.3 ask
+     for the MTAC pharmacist's signature and stamp on the manual record. */
+  #printSignature { display: block !important; }
+}
+
+#printSignature { display: none; }
+
+/* Per-component insulin dose evaluation: colour-code which part of the
+   regimen is out of range so it reads at a glance. */
+.tdd-high { color: var(--danger); font-weight: 600; }
+.tdd-watch { color: var(--accent); font-weight: 600; }
+.tdd-ok { color: var(--muted); }
+@media print {
+  .tdd-high { color: #000 !important; font-weight: 700; }
+  .tdd-watch { color: #000 !important; }
+  .tdd-ok { color: #333 !important; }
+}
+
+/* Repeatable Pharmaceutical Care Issue cards. */
+.pci-card {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--blue);
+  border-radius: var(--radius);
+  background: #fbfdfe;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.pci-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.pci-card-title { font-size: 13px; color: var(--blue-dark); }
+.pci-remove { padding: 5px 10px; font-size: 11.5px; }
+#pciAddBtn { font-weight: 600; }
+@media print {
+  .pci-card { border: 0.75pt solid #999 !important; border-left: 2.5pt solid #000 !important; page-break-inside: avoid; }
+  .pci-remove, #pciAddBtn { display: none !important; }
+}
+
+/* Product slogan under the header subtitle. Sits on the gold keyline
+   accent so it reads as the app's promise rather than more subtitle. */
+.app-slogan {
+  margin: 0 0 12px 0;
+  font-size: 12.5px;
+  font-style: italic;
+  color: #f0d9a8;
+  letter-spacing: 0.01em;
+  border-left: 3px solid var(--accent);
+  padding-left: 9px;
+}
+
+@media print {
+  .app-slogan {
+    color: #333 !important;
+    border-left: 2pt solid #000;
+    font-size: 8.5pt;
+  }
+}

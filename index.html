@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DMTAC QuickClerk</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!--
+  Access gate: a soft deterrent only, NOT real security. It exists to mark this
+  tool as Klinik Kesihatan Seberang Jaya's work and discourage casual
+  re-sharing of the link, not to protect secret data (the app stores no
+  patient data). Anyone who views page source can see/bypass it.
+-->
+<div id="lockOverlay" class="lock-overlay">
+  <div class="lock-box">
+    <img src="dmtac-logo.png" alt="DMTAC QuickClerk logo" class="lock-logo">
+    <h2>DMTAC QuickClerk</h2>
+    <p class="hint">Built for PKD Seberang Perai Tengah DMTAC pharmacists. Enter the access code given to continue.</p>
+    <input type="password" id="lockPassword" aria-label="Access code" placeholder="Access code" autocomplete="off">
+    <button type="button" id="lockUnlockBtn" class="primary-btn">Unlock</button>
+    <p id="lockError" class="warning-text"></p>
+  </div>
+</div>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <div class="app-logo-badge">
+      <img src="dmtac-logo.png" alt="DMTAC QuickClerk logo" class="app-logo">
+    </div>
+    <div class="app-header-text">
+      <h1>DMTAC QuickClerk</h1>
+      <p class="subtitle">A Closed-Loop Digital Clinical Workflow for Pharmacist-Led Chronic Disease Care</p>
+      <p class="app-slogan">One clinical encounter, one structured dataset, multiple outputs &mdash; without repeated documentation.</p>
+    </div>
+  </div>
+  <div class="warning-banner">
+    <strong>&#9888; Do not enter patient identifiers</strong> (name, IC number, MRN, phone number, address, exact appointment details).
+  </div>
+  <div class="warning-banner">
+    <strong>&#9888; Generated note is a draft.</strong> Pharmacist must verify before pasting into CCMS / PHIS.
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ AI SMART DICTATION (optional, opt-in) ============ -->
+  <section class="card">
+    <details>
+      <summary><h2 style="display:inline;">AI Smart Dictation (Optional, Beta)</h2></summary>
+      <div class="warning-banner" style="margin-top:10px;">
+        <strong>&#9888; This is the only feature where data leaves your device.</strong> Whatever you dictate/paste here is sent to the AI provider you choose below. <strong>Do not include patient identifiers</strong> &mdash; same rule as the rest of the app. Everything else in this tool stays fully offline; this section is entirely optional and the manual field-by-field workflow below works exactly as before if you skip it.
+      </div>
+
+      <div class="grid grid-2" style="margin-top:10px;">
+        <label>AI provider
+          <select id="aiProvider">
+            <option value="pkdspt-shared">PKD SPT Shared Gemini (access code, no personal key needed)</option>
+            <option value="gemini">Google (Gemini) &mdash; your own key</option>
+            <option value="anthropic">Anthropic (Claude) &mdash; your own key</option>
+            <option value="openai">OpenAI (GPT) &mdash; your own key</option>
+          </select>
+        </label>
+        <label>Model (edit if needed)
+          <input type="text" id="aiModel" value="gemini-3.7-flash">
+        </label>
+      </div>
+      <label id="aiApiKeyLabel"><span id="aiApiKeyLabelText">Access code (ask your DMTAC lead for this &mdash; not a personal API key)</span>
+        <input type="password" id="aiApiKey" placeholder="Enter the shared access code" autocomplete="off">
+      </label>
+      <p id="aiApiKeyHint" class="hint">This option uses a shared Gemini proxy set up by your DMTAC lead, so you don't need your own API key &mdash; just ask them for the access code. Your dictation text is sent to the proxy, then to Google Gemini, using the lead's account.</p>
+
+      <label>Dictate or paste your full clerking narrative here
+        <div class="field-with-dictate">
+          <textarea id="aiDictationBox" rows="6" placeholder="e.g. Visit 3, 58 year old female, T2DM for 10 years, on metformin 500mg twice daily and gliclazide MR 60mg once daily. HbA1c is 7.8 percent. Blood pressure 130 over 80. She admits missing doses sometimes because she forgets..."></textarea>
+          <button type="button" class="mic-btn" data-target="aiDictationBox">&#127908;</button>
+        </div>
+      </label>
+
+      <div class="button-row">
+        <button type="button" id="aiParseBtn" class="primary-btn">Parse &amp; Auto-Fill Fields</button>
+        <label style="font-weight:400; font-size:12px; display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="aiOverwriteExisting"> Overwrite fields that already have content
+        </label>
+      </div>
+      <p id="aiStatus" class="hint"></p>
+    </details>
+  </section>
+
+  <!-- ============ VISIT & BACKGROUND ============ -->
+  <section class="card">
+    <h2>Visit &amp; Background</h2>
+    <div class="grid grid-2">
+      <label>Visit number
+        <input type="number" id="visitNumber" min="1" step="1" placeholder="e.g. 3">
+      </label>
+      <label class="full">Flipchart for this visit (audit requirement, PHIS note only)
+        <p id="flipchartIndicator" class="hint">Enter a visit number above.</p>
+      </label>
+      <label class="full">Reason for recruitment into DMTAC
+        <div class="field-with-dictate"><input type="text" id="reasonForRecruitment" placeholder="e.g. Uncontrolled HbA1c, newly started insulin, referred by MO for adherence issue"><button type="button" class="mic-btn" data-target="reasonForRecruitment">&#127908;</button></div>
+      </label>
+      <div class="full phrase-bank" data-target="reasonForRecruitment">
+        <button type="button" class="phrase-btn">Uncontrolled diabetes despite medication optimisation.</button>
+        <button type="button" class="phrase-btn">Non-adherent to medications.</button>
+        <button type="button" class="phrase-btn">Failure to achieve individualised HbA1c target.</button>
+        <button type="button" class="phrase-btn">Co-morbidities or multiple medications.</button>
+        <button type="button" class="phrase-btn">Microvascular or macrovascular complications.</button>
+        <button type="button" class="phrase-btn">Frequent hypoglycaemia.</button>
+        <button type="button" class="phrase-btn">Newly started / newly optimised insulin therapy.</button>
+        <button type="button" class="phrase-btn">High insulin doses (TDD &gt;1.5 IU/kg/day) or bolus insulin &gt;50% of TDD.</button>
+        <button type="button" class="phrase-btn">Re-recruited as Visit 1 (discharged &ge;6 months ago).</button>
+      </div>
+      <p class="hint full">Recruitment criteria per DMTAC Protocol (KKM, 3rd Ed. 2022), Section 1: any one of the above.</p>
+      <label>Age / sex / brief demographic
+        <div class="field-with-dictate"><input type="text" id="ageSex" placeholder="e.g. 58F"><button type="button" class="mic-btn" data-target="ageSex">&#127908;</button></div>
+      </label>
+      <label>T2DM duration
+        <div class="field-with-dictate"><input type="text" id="t2dmDuration" placeholder="e.g. 10 years"><button type="button" class="mic-btn" data-target="t2dmDuration">&#127908;</button></div>
+        <div class="phrase-bank" data-target="t2dmDuration" data-mode="replace">
+          <button type="button" class="phrase-btn">&gt;10 years</button>
+          <button type="button" class="phrase-btn">5&ndash;10 years</button>
+          <button type="button" class="phrase-btn">1&ndash;5 years</button>
+          <button type="button" class="phrase-btn">Newly diagnosed</button>
+          <button type="button" class="phrase-btn">&lt;1 year</button>
+        </div>
+      </label>
+      <label>Comorbidities / complications
+        <div class="field-with-dictate"><input type="text" id="comorbidities" placeholder="e.g. HPT, dyslipidaemia, CKD stage 3"><button type="button" class="mic-btn" data-target="comorbidities">&#127908;</button></div>
+        <div class="phrase-bank" data-target="comorbidities" data-sep=", ">
+          <button type="button" class="phrase-btn">HPT</button>
+          <button type="button" class="phrase-btn">Dyslipidaemia</button>
+          <button type="button" class="phrase-btn">Obesity</button>
+          <button type="button" class="phrase-btn">CKD</button>
+          <button type="button" class="phrase-btn">Diabetic nephropathy</button>
+          <button type="button" class="phrase-btn">Diabetic retinopathy</button>
+          <button type="button" class="phrase-btn">Diabetic neuropathy</button>
+          <button type="button" class="phrase-btn">Nil significant</button>
+          <button type="button" class="phrase-btn">IHD</button>
+          <button type="button" class="phrase-btn">Heart failure</button>
+          <button type="button" class="phrase-btn">CVA/stroke</button>
+          <button type="button" class="phrase-btn">PAD</button>
+          <button type="button" class="phrase-btn">Diabetic foot ulcer</button>
+          <button type="button" class="phrase-btn">Gout</button>
+          <button type="button" class="phrase-btn">Fatty liver</button>
+        </div>
+      </label>
+      <label class="full">Allergy
+        <div class="field-with-dictate"><input type="text" id="allergy" placeholder="e.g. NKDA"><button type="button" class="mic-btn" data-target="allergy">&#127908;</button></div>
+        <div class="phrase-bank" data-target="allergy" data-sep=", ">
+          <button type="button" class="phrase-btn">NKDA</button>
+          <button type="button" class="phrase-btn">Sulphonamides</button>
+          <button type="button" class="phrase-btn">Penicillin</button>
+          <button type="button" class="phrase-btn">NSAIDs</button>
+          <button type="button" class="phrase-btn">Metformin intolerance (GI)</button>
+          <button type="button" class="phrase-btn">Statin intolerance (myalgia)</button>
+        </div>
+      </label>
+      <label class="full">Family history
+        <div class="field-with-dictate"><input type="text" id="familyHistory" placeholder="e.g. Mother with T2DM, father with IHD"><button type="button" class="mic-btn" data-target="familyHistory">&#127908;</button></div>
+        <div class="phrase-bank" data-target="familyHistory" data-sep=", ">
+          <button type="button" class="phrase-btn">Family history of T2DM</button>
+          <button type="button" class="phrase-btn">Family history of HPT</button>
+          <button type="button" class="phrase-btn">Nil significant</button>
+          <button type="button" class="phrase-btn">Family history of dyslipidaemia</button>
+          <button type="button" class="phrase-btn">Family history of premature ASCVD</button>
+          <button type="button" class="phrase-btn">Family history of CKD</button>
+        </div>
+      </label>
+      <label class="full">Social history (smoking / alcohol / occupation / family support)
+        <div class="field-with-dictate"><input type="text" id="socialHistory" placeholder="e.g. Non-smoker, no alcohol, lives with family"><button type="button" class="mic-btn" data-target="socialHistory">&#127908;</button></div>
+        <div class="phrase-bank" data-target="socialHistory" data-sep=", ">
+          <button type="button" class="phrase-btn">Non-smoker</button>
+          <button type="button" class="phrase-btn">No alcohol</button>
+          <button type="button" class="phrase-btn">Lives with family</button>
+          <button type="button" class="phrase-btn">Ex-smoker</button>
+          <button type="button" class="phrase-btn">Current smoker</button>
+          <button type="button" class="phrase-btn">Occasional alcohol</button>
+          <button type="button" class="phrase-btn">Lives alone</button>
+          <button type="button" class="phrase-btn">Good family support</button>
+          <button type="button" class="phrase-btn">Limited family support</button>
+          <button type="button" class="phrase-btn">Caregiver assists with medication</button>
+          <button type="button" class="phrase-btn">Working</button>
+          <button type="button" class="phrase-btn">Retired</button>
+          <button type="button" class="phrase-btn">Shift worker</button>
+          <button type="button" class="phrase-btn">Drives / operates machinery</button>
+        </div>
+        <div id="smokerBox" class="ckd-flag-box" style="display:none;">
+          <p style="margin:0 0 6px 0;">Current smoker recorded &mdash; smoking cessation counselling is an audit item (SENARAI SEMAK 7.8), and diabetes plus smoking compounds cardiovascular risk.</p>
+          <label class="audit-item" style="font-weight:400;"><input type="checkbox" id="refQuitSmoking"> Referred to <strong>Quit Smoking Clinic (Klinik Berhenti Merokok)</strong></label>
+          <label class="audit-item" style="font-weight:400;"><input type="checkbox" id="quitSmokingDeclined"> Referral offered but <strong>declined</strong> by patient</label>
+          <label class="audit-item" style="font-weight:400;"><input type="checkbox" id="quitSmokingAlready"> Already under Quit Smoking Clinic follow-up</label>
+        </div>
+      </label>
+    </div>
+  </section>
+
+  <!-- ============ MEDICATION HISTORY ============ -->
+  <section class="card">
+    <h2>Medication History</h2>
+    <div class="grid grid-2">
+      <label class="full">Current diabetes medications
+        <div class="field-with-dictate"><textarea id="currentDMMeds" rows="2" placeholder="e.g. Metformin 1g BD, Gliclazide MR 60mg OD, Insulin glargine 30ii ON"></textarea><button type="button" class="mic-btn" data-target="currentDMMeds">&#127908;</button></div>
+      </label>
+      <div class="full">
+        <p class="hint">KKSJ formulary &mdash; pick a strength/frequency and click Add (appends to the field above). Prices/quota are formulary reference only, not for the note.</p>
+        <p class="hint" style="margin-bottom:2px;"><strong>Oral / non-insulin agents</strong></p>
+        <div class="dose-picker-group" data-target="currentDMMeds" data-sep="; ">
+          <div class="dose-picker-row">
+            <span class="dose-drug-label">T. Metformin</span>
+            <select class="dose-select" aria-label="Dose for T. Metformin">
+              <option value="500mg BD">500mg BD</option>
+              <option value="1g BD">1g BD</option>
+            </select>
+            <button type="button" class="secondary-btn dose-add-btn" data-prefix="T. Metformin">Add</button>
+          </div>
+          <div class="dose-picker-row">
+            <span class="dose-drug-label">T. Metformin XR</span>
+            <select class="dose-select" aria-label="Dose for T. Metformin XR">
+              <option value="500mg ON">500mg ON</option>
+              <option value="1g ON">1g ON</option>
+              <option value="1.5g ON">1.5g ON</option>
+              <option value="2g ON">2g ON</option>
+            </select>
+            <button type="button" class="secondary-btn dose-add-btn" data-prefix="T. Metformin XR">Add</button>
+          </div>
+          <div class="dose-picker-row">
+            <span class="dose-drug-label">T. Gliclazide MR</span>
+            <select class="dose-select" aria-label="Dose for T. Gliclazide MR">
+              <option value="30mg OD">30mg OD</option>
+              <option value="60mg OD">60mg OD</option>
+              <option value="90mg OD">90mg OD</option>
+              <option value="120mg OD">120mg OD</option>
+            </select>
+            <button type="button" class="secondary-btn dose-add-btn" data-prefix="T. Gliclazide MR">Add</button>
+          </div>
+          <div class="dose-picker-row">
+            <span class="dose-drug-label">T. Gliclazide</span>
+            <select class="dose-select" aria-label="Dose for T. Gliclazide">
+              <option value="40mg BD">40mg BD</option>
+              <option value="80mg BD">80mg BD</option>
+              <option value="120mg BD">120mg BD</option>
+              <option value="160mg BD">160mg BD</option>
+            </select>
+            <button type="button" class="secondary-btn dose-add-btn" data-prefix="T. Gliclazide">Add</button>
+          </div>
+          <div class="dose-picker-row">
+            <span class="dose-drug-label">T. Vildagliptin</span>
+            <select class="dose-select" aria-label="Dose for T. Vildagliptin">
+              <option value="50mg OD">50mg OD</option>
+              <option value="50mg BD">50mg BD</option>
+            </select>
+            <button type="button" class="secondary-btn dose-add-btn" data-prefix="T. Vildagliptin">Add</button>
+          </div>
+          <div class="dose-picker-row">
+            <span class="dose-drug-label">T. Empagliflozin</span>
+            <select class="dose-select" aria-label="Dose for T. Empagliflozin">
+              <option value="10mg OM">10mg OM</option>
+              <option value="25mg OM">25mg OM</option>
+            </select>
+            <button type="button" class="secondary-btn dose-add-btn" data-prefix="T. Empagliflozin">Add</button>
+          </div>
+          <div class="dose-picker-row">
+            <button type="button" class="secondary-btn dose-add-btn" data-fixed-text="T. Galvusmet 50/1000 1 tab BD">T. Galvusmet 50/1000 1 tab BD</button>
+            <button type="button" class="secondary-btn dose-add-btn" data-fixed-text="T. Dapagliflozin 10mg OM">T. Dapagliflozin 10mg OM</button>
+          </div>
+        </div>
+        <p class="hint" style="margin-bottom:2px;"><strong>Insulin</strong></p>
+        <div class="phrase-bank" data-target="currentDMMeds" data-sep="; ">
+          <button type="button" class="phrase-btn">s/c Insulin Aspart 30%/Protamine 70% 100IU/ml</button>
+          <button type="button" class="phrase-btn">s/c Insulin Aspart 100IU/ml</button>
+          <button type="button" class="phrase-btn">s/c Insulin Glargine 100IU/ml</button>
+          <button type="button" class="phrase-btn">s/c Insulin Glargine 300IU/ml</button>
+          <button type="button" class="phrase-btn">s/c Diabulyn R penfill</button>
+          <button type="button" class="phrase-btn">s/c Diabulyn 30/70 premixed penfill</button>
+          <button type="button" class="phrase-btn">s/c Diabulyn N penfill</button>
+        </div>
+      </div>
+      <label class="full">Other relevant medications
+        <div class="field-with-dictate"><textarea id="otherMeds" rows="2" placeholder="e.g. Amlodipine 5mg OD, Atorvastatin 20mg ON"></textarea><button type="button" class="mic-btn" data-target="otherMeds">&#127908;</button></div>
+      </label>
+      <div class="full phrase-bank" data-target="otherMeds" data-sep="; ">
+        <button type="button" class="phrase-btn">Diabetes medication self-purchased / private supply (outside KKSJ formulary) &mdash; specify name &amp; dose:</button>
+        <button type="button" class="phrase-btn">Oral corticosteroid (specify agent, dose &amp; indication)</button>
+        <button type="button" class="phrase-btn">Intra-articular / intramuscular steroid injection given recently</button>
+        <button type="button" class="phrase-btn">Traditional / complementary medicine (specify)</button>
+        <button type="button" class="phrase-btn">Herbal or health supplement (specify)</button>
+        <button type="button" class="phrase-btn">No traditional/complementary medicine used</button>
+      </div>
+      <div class="full">
+        <p class="hint" style="margin:8px 0 2px 0;"><strong>Patient Own Medicine (POM)</strong> &mdash; medicines the patient brought from elsewhere (private/other facility/self-purchased/leftover supply). Recording "none" explicitly is what documents the absence of polypharmacy from an outside source.</p>
+        <div id="pomGroup">
+          <label class="audit-item"><input type="radio" name="pomStatus" id="pomNone" value="none"> <strong>No Patient Own Medicine</strong> &mdash; no polypharmacy from an outside source</label>
+          <label class="audit-item"><input type="radio" name="pomStatus" id="pomReviewed" value="reviewed"> <strong>POM reviewed</strong> &mdash; patient has own medicine, reconciled this visit</label>
+        </div>
+        <label id="pomDetailWrap" style="display:none;">POM detail (name, dose, source, action taken)
+          <div class="field-with-dictate"><input type="text" id="pomDetail" placeholder="e.g. T. Metformin 500mg BD from private GP; duplication with clinic supply, advised to stop private supply"><button type="button" class="mic-btn" data-target="pomDetail">&#127908;</button></div>
+        </label>
+        <div class="full" id="auditAnchorMeds"></div>
+        <div id="pomPhraseBank" class="phrase-bank" data-target="pomDetail" data-sep="; " style="display:none;">
+          <button type="button" class="phrase-btn">No duplication with clinic supply</button>
+          <button type="button" class="phrase-btn">Duplication identified with clinic supply</button>
+          <button type="button" class="phrase-btn">Expired stock found, advised to discard</button>
+          <button type="button" class="phrase-btn">Leftover supply from previous regimen</button>
+          <button type="button" class="phrase-btn">Private GP supply</button>
+          <button type="button" class="phrase-btn">Supply from another facility</button>
+          <button type="button" class="phrase-btn">Traditional/complementary product</button>
+          <button type="button" class="phrase-btn">Advised to bring all medicines to every visit</button>
+        </div>
+      </div>
+      <label>Medication changes since last visit
+        <div class="field-with-dictate"><textarea id="medChanges" rows="2"></textarea><button type="button" class="mic-btn" data-target="medChanges">&#127908;</button></div>
+        <div class="phrase-bank" data-target="medChanges">
+          <button type="button" class="phrase-btn">No change since last visit.</button>
+          <button type="button" class="phrase-btn">Dose up-titrated.</button>
+          <button type="button" class="phrase-btn">Dose reduced.</button>
+          <button type="button" class="phrase-btn">New agent added.</button>
+          <button type="button" class="phrase-btn">Agent stopped.</button>
+          <button type="button" class="phrase-btn">Switched to a different agent within the same class.</button>
+          <button type="button" class="phrase-btn">Insulin initiated.</button>
+          <button type="button" class="phrase-btn">Changed by MO/FMS at last clinic review.</button>
+        </div>
+      </label>
+      <label>Medication side effects
+        <div class="field-with-dictate"><textarea id="sideEffects" rows="2"></textarea><button type="button" class="mic-btn" data-target="sideEffects">&#127908;</button></div>
+        <div class="phrase-bank" data-target="sideEffects">
+          <button type="button" class="phrase-btn">Nil reported.</button>
+          <button type="button" class="phrase-btn">GI upset / diarrhoea (metformin).</button>
+          <button type="button" class="phrase-btn">Nausea / early satiety (GLP-1 RA).</button>
+          <button type="button" class="phrase-btn">Genital / urinary tract infection (SGLT2i).</button>
+          <button type="button" class="phrase-btn">Increased urinary frequency (SGLT2i).</button>
+          <button type="button" class="phrase-btn">Hypoglycaemia episodes.</button>
+          <button type="button" class="phrase-btn">Weight gain.</button>
+          <button type="button" class="phrase-btn">Muscle aches (statin).</button>
+          <button type="button" class="phrase-btn">Ankle swelling.</button>
+          <button type="button" class="phrase-btn">Dry cough (ACEi).</button>
+        </div>
+      </label>
+      <div class="full">
+        <p class="hint"><strong>Newly started this visit?</strong> Auto-adds MOA/administration/side-effect counselling wording to the CCMS Plan, and a flipchart-used note to the PHIS note. Also tick the matching item in the PHIS Audit-Required Checklist (Pharmacotherapy Review) if that detailed counselling was given.</p>
+        <label class="audit-item"><input type="checkbox" id="newSglt2"> Newly started SGLT2 inhibitor (Empagliflozin / Dapagliflozin)</label>
+        <label class="audit-item"><input type="checkbox" id="newGlp1"> Newly started GLP-1 receptor agonist</label>
+      </div>
+      <details class="myMaat-module">
+        <summary>Quick Counselling Reference: SGLT2 Inhibitor &amp; GLP-1 RA (source: KKM patient pamphlets, kemaskini Mei 2025)</summary>
+        <div class="grid grid-2" style="margin-top:8px;">
+          <div>
+            <p class="hint" style="margin:0 0 4px 0;"><strong>SGLT2 inhibitor</strong> (Empagliflozin, Dapagliflozin, Canagliflozin, Ertugliflozin)</p>
+            <p class="hint" style="margin:0;">
+              Take once daily, before or after food.<br>
+              Benefits: &darr;glucose, &darr;weight, &darr;BP, cardio- &amp; renal-protective.<br>
+              Side effects (low risk): UTI, genital infection, dehydration (thirst/dry mouth/fatigue).<br>
+              Hygiene: clean genital area front-to-back, don't hold urine, dry thoroughly, change pads/diapers frequently.<br>
+              Hydration: adequate plain water (cardiac/renal patients follow doctor's fluid advice).<br>
+              <strong>Sick day rule:</strong> STOP temporarily if vomiting/diarrhoea/fever, unable to eat/drink normally, or UTI symptoms; resume once well.<br>
+              <strong>Euglycaemic DKA warning signs:</strong> unusual fatigue, nausea, vomiting, severe thirst, frequent urination, fruity-smelling breath, difficulty breathing &mdash; seek care urgently.<br>
+              Avoid in: allergy, end-stage renal disease/dialysis (dapagliflozin only), DKA, pregnancy/breastfeeding.
+            </p>
+          </div>
+          <div>
+            <p class="hint" style="margin:0 0 4px 0;"><strong>GLP-1 RA</strong> (Semaglutide/Ozempic weekly, Rybelsus oral daily, Liraglutide/Victoza daily, Dulaglutide/Trulicity weekly)</p>
+            <p class="hint" style="margin:0;">
+              Mechanism: &uarr;insulin release, &darr;glucagon, slows gastric emptying, &uarr;satiety.<br>
+              Oral tablet: empty stomach on waking, swallow whole with &lt;120mL water, wait 30min&ndash;2h before food/drink/other meds.<br>
+              Injection: rotate sites to prevent lipodystrophy; fixed schedule.<br>
+              Missed dose: Semaglutide inject within 5 days; Dulaglutide within 4 days; Liraglutide within 12 hours; oral Semaglutide skip &amp; resume next day.<br>
+              Storage: unopened pen in fridge (2&ndash;8&deg;C); in-use pen at room temp away from sunlight; dispose needles/pens in sharps container.<br>
+              Side effects: nausea (small frequent meals, eat slowly, ginger/mint, avoid strong odours), vomiting/diarrhoea (hydrate, avoid high-fat/fried/spicy food), constipation (fluids, fibre, activity).<br>
+              Avoid in: acute pancreatitis, personal/family history of medullary thyroid cancer or MEN2, pregnancy/breastfeeding, allergy.
+            </p>
+          </div>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============ SUBJECTIVE ============ -->
+  <section class="card">
+    <h2>Subjective</h2>
+    <div class="grid grid-2">
+      <label>Main issue today
+        <div class="field-with-dictate"><textarea id="mainIssue" rows="2"></textarea><button type="button" class="mic-btn" data-target="mainIssue">&#127908;</button></div>
+        <div class="phrase-bank" data-target="mainIssue">
+          <button type="button" class="phrase-btn">Routine DMTAC follow-up, no new complaint.</button>
+          <button type="button" class="phrase-btn">Suboptimal glycaemic control.</button>
+          <button type="button" class="phrase-btn">Poor medication adherence.</button>
+          <button type="button" class="phrase-btn">Recurrent hypoglycaemia.</button>
+          <button type="button" class="phrase-btn">Insulin injection technique issue.</button>
+          <button type="button" class="phrase-btn">Not monitoring SMBG.</button>
+          <button type="button" class="phrase-btn">Dietary non-adherence.</button>
+          <button type="button" class="phrase-btn">New medication counselling required.</button>
+          <button type="button" class="phrase-btn">Hyperglycaemia following a course of steroids.</button>
+          <button type="button" class="phrase-btn">Hyperglycaemia during an intercurrent infection.</button>
+          <button type="button" class="phrase-btn">Unexplained fasting hyperglycaemia.</button>
+          <button type="button" class="phrase-btn">HbA1c does not match the SMBG record.</button>
+          <button type="button" class="phrase-btn">Glucometer problem reported by patient.</button>
+        </div>
+      </label>
+      <label>Patient concern
+        <div class="field-with-dictate"><textarea id="patientConcern" rows="2"></textarea><button type="button" class="mic-btn" data-target="patientConcern">&#127908;</button></div>
+        <div class="phrase-bank" data-target="patientConcern">
+          <button type="button" class="phrase-btn">Nil raised.</button>
+          <button type="button" class="phrase-btn">Worried about starting insulin.</button>
+          <button type="button" class="phrase-btn">Fear of needles / injection pain.</button>
+          <button type="button" class="phrase-btn">Concerned about hypoglycaemia.</button>
+          <button type="button" class="phrase-btn">Concerned about long-term side effects.</button>
+          <button type="button" class="phrase-btn">Finds the regimen too complicated.</button>
+          <button type="button" class="phrase-btn">Too many tablets / pill burden.</button>
+          <button type="button" class="phrase-btn">Cost or supply difficulty.</button>
+          <button type="button" class="phrase-btn">Asked about fasting.</button>
+          <button type="button" class="phrase-btn">Asked about traditional/complementary medicine.</button>
+        </div>
+      </label>
+      <label>Adherence summary
+        <div class="field-with-dictate"><textarea id="adherenceSummary" rows="2"></textarea><button type="button" class="mic-btn" data-target="adherenceSummary">&#127908;</button></div>
+      </label>
+      <label>Hypoglycaemia symptoms
+        <div class="field-with-dictate"><textarea id="hypoSymptoms" rows="2"></textarea><button type="button" class="mic-btn" data-target="hypoSymptoms">&#127908;</button></div>
+        <div class="phrase-bank" data-target="hypoSymptoms" data-sep=", ">
+          <button type="button" class="phrase-btn">Nil</button>
+          <button type="button" class="phrase-btn">Sweating</button>
+          <button type="button" class="phrase-btn">Tremor / shakiness</button>
+          <button type="button" class="phrase-btn">Palpitations</button>
+          <button type="button" class="phrase-btn">Hunger</button>
+          <button type="button" class="phrase-btn">Dizziness / light-headedness</button>
+          <button type="button" class="phrase-btn">Headache</button>
+          <button type="button" class="phrase-btn">Blurred vision</button>
+          <button type="button" class="phrase-btn">Confusion</button>
+          <button type="button" class="phrase-btn">Nocturnal symptoms</button>
+          <button type="button" class="phrase-btn">Hypoglycaemia unawareness</button>
+        </div>
+      </label>
+      <label>Lifestyle / diet issue
+        <div class="field-with-dictate"><textarea id="lifestyleIssue" rows="2"></textarea><button type="button" class="mic-btn" data-target="lifestyleIssue">&#127908;</button></div>
+        <div class="phrase-bank" data-target="lifestyleIssue">
+          <button type="button" class="phrase-btn">Nil significant.</button>
+          <button type="button" class="phrase-btn">Large rice/carbohydrate portions.</button>
+          <button type="button" class="phrase-btn">Frequent sweet drinks.</button>
+          <button type="button" class="phrase-btn">Frequent eating out / hawker food.</button>
+          <button type="button" class="phrase-btn">Irregular meal timing.</button>
+          <button type="button" class="phrase-btn">Skipping meals.</button>
+          <button type="button" class="phrase-btn">Frequent snacking / supper.</button>
+          <button type="button" class="phrase-btn">High intake of kuih / desserts.</button>
+          <button type="button" class="phrase-btn">Sedentary lifestyle.</button>
+        </div>
+      </label>
+      <label>Exercise / activity
+        <div class="field-with-dictate"><textarea id="exerciseActivity" rows="2"></textarea><button type="button" class="mic-btn" data-target="exerciseActivity">&#127908;</button></div>
+        <div class="phrase-bank" data-target="exerciseActivity">
+          <button type="button" class="phrase-btn">Sedentary, no regular exercise.</button>
+          <button type="button" class="phrase-btn">Brisk walking most days.</button>
+          <button type="button" class="phrase-btn">Meets the 150 min/week moderate-intensity target.</button>
+          <button type="button" class="phrase-btn">Below the 150 min/week target.</button>
+          <button type="button" class="phrase-btn">Physically active at work.</button>
+          <button type="button" class="phrase-btn">Limited by joint pain / mobility.</button>
+          <button type="button" class="phrase-btn">Advised to build up gradually as tolerated.</button>
+        </div>
+      </label>
+    </div>
+  </section>
+
+  <!-- ============ OBJECTIVE ============ -->
+  <section class="card">
+    <h2>Objective</h2>
+    <div class="grid grid-3">
+      <label>Latest HbA1c
+        <div class="field-with-dictate"><input type="text" id="hba1c" placeholder="e.g. 7.8%"><button type="button" class="mic-btn" data-target="hba1c">&#127908;</button></div>
+        <div class="phrase-bank" data-target="hba1c" data-sep="; ">
+          <button type="button" class="phrase-btn">Not done</button>
+          <button type="button" class="phrase-btn">Pending</button>
+          <button type="button" class="phrase-btn">Defaulted lab appointment</button>
+          <button type="button" class="phrase-btn">Done elsewhere, result not available</button>
+        </div>
+      </label>
+      <label>FBS / RBS / SMBG pattern
+        <div class="field-with-dictate"><input type="text" id="smbgPattern" placeholder="e.g. FBS 6-8, post-prandial 9-11"><button type="button" class="mic-btn" data-target="smbgPattern">&#127908;</button></div>
+        <div class="phrase-bank" data-target="smbgPattern" data-sep="; ">
+          <button type="button" class="phrase-btn">Not monitoring SMBG</button>
+          <button type="button" class="phrase-btn">No glucometer</button>
+          <button type="button" class="phrase-btn">Monitors but no diary brought</button>
+          <button type="button" class="phrase-btn">FBS within target</button>
+          <button type="button" class="phrase-btn">FBS above target</button>
+          <button type="button" class="phrase-btn">Post-prandial above target</button>
+          <button type="button" class="phrase-btn">Readings fluctuating widely</button>
+          <button type="button" class="phrase-btn">Low readings recorded</button>
+        </div>
+      </label>
+      <label>BP
+        <div class="field-with-dictate"><input type="text" id="bp" placeholder="e.g. 128/78"><button type="button" class="mic-btn" data-target="bp">&#127908;</button></div>
+        <div class="phrase-bank" data-target="bp" data-sep="; ">
+          <button type="button" class="phrase-btn">Not taken this visit</button>
+          <button type="button" class="phrase-btn">Home BP reading</button>
+        </div>
+      </label>
+      <label>Lipid profile (LDL-C / others)
+        <div class="field-with-dictate"><input type="text" id="ldl" placeholder="e.g. LDL-C 2.1 mmol/L"><button type="button" class="mic-btn" data-target="ldl">&#127908;</button></div>
+        <div class="phrase-bank" data-target="ldl" data-sep="; ">
+          <button type="button" class="phrase-btn">Not done</button>
+          <button type="button" class="phrase-btn">Pending</button>
+          <button type="button" class="phrase-btn">Defaulted lab appointment</button>
+        </div>
+      </label>
+      <label>Triglycerides (TG)
+        <div class="field-with-dictate"><input type="text" id="tg" placeholder="e.g. 1.5 mmol/L"><button type="button" class="mic-btn" data-target="tg">&#127908;</button></div>
+        <div class="phrase-bank" data-target="tg" data-sep="; ">
+          <button type="button" class="phrase-btn">Not done</button>
+          <button type="button" class="phrase-btn">Pending</button>
+        </div>
+      </label>
+      <label class="full" style="margin-bottom:6px;">
+        <p id="tgHint" class="hint" style="margin:0;"></p>
+      </label>
+      <div class="full">
+        <details class="myMaat-module">
+          <summary>Lipid-Lowering Therapy Advisor &mdash; Framingham CVD risk &rarr; LDL-C target &rarr; statin suitability (tap to open)</summary>
+          <p class="hint">Adapted and substantially extended from a public <a href="https://diseasesnhealth.com/calculator/framingham-risk-score-calculator/" target="_blank" rel="noopener">Framingham Risk Score calculator</a> (itself based on the CPG Dyslipidaemia 2023 Table 1A/1B &amp; 2A/2B FRS-General CVD tables), with this facility's own formulary and the statin-intensity table added on top so the tool goes all the way from risk score to a specific drug/dose suggestion. Sources: D'Agostino RB Sr et al., "General Cardiovascular Risk Profile for Use in Primary Care," <em>Circulation</em> 2008;117:743&ndash;753; CPG Management of Dyslipidaemia, 6th Ed. 2023 (Tables 1A/1B, 2A/2B, 4 &amp; 12); 2026 ACC/AHA/AACVPR/ABC/ACPM/ADA/AGS/APhA/ASPC/NLA/PCNA Guideline on the Management of Dyslipidemia (Table 6). This is a calculation and formulary-matching aid, not a substitute for clinical judgement.</p>
+
+          <h4 style="margin:10px 0 4px 0; font-size:13px; color:var(--blue);">1. Framingham General CVD risk inputs</h4>
+          <div class="grid grid-3">
+            <label>Sex
+              <select id="lipidSex">
+                <option value="">&hellip;</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+              </select>
+            </label>
+            <label>Age (years)
+              <input type="number" id="lipidAge" min="30" max="99" placeholder="e.g. 58">
+            </label>
+            <label>Total Cholesterol (mmol/L)
+              <input type="number" step="0.1" id="lipidTC" placeholder="e.g. 5.5">
+            </label>
+            <label>HDL-C (mmol/L)
+              <input type="number" step="0.1" id="lipidHDL" placeholder="e.g. 1.1">
+            </label>
+            <label>Systolic BP (mmHg)
+              <input type="number" id="lipidSBP" placeholder="e.g. 138">
+            </label>
+            <label class="full" style="display:flex; gap:16px; align-items:center; margin-top:6px;">
+              <span style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" id="lipidBpTreated" style="width:auto;"> On BP-lowering treatment</span>
+              <span style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" id="lipidSmoker" style="width:auto;"> Current smoker</span>
+              <span style="display:flex; align-items:center; gap:4px; font-weight:400;"><input type="checkbox" id="lipidDiabetes" style="width:auto;"> Diabetes</span>
+            </label>
+          </div>
+          <p class="hint">Use the average of &ge;2 readings for cholesterol and BP where possible. Validated mainly for ages 30&ndash;74; ages 75&ndash;79 may be overestimated (D'Agostino 2008). HDL-C must be lower than Total Cholesterol.</p>
+
+          <h4 style="margin:14px 0 4px 0; font-size:13px; color:var(--blue);">2. Clinical risk-category overrides (CPG Dyslipidaemia 2023, Section 5.2.3 &amp; Table 4) &mdash; tick any that apply</h4>
+          <p class="hint">These categorical criteria take precedence over the calculated Framingham score, per the CPG: "Individuals who belong to the Very High Risk and High-Risk categories do not need to be risk stratified using the FRS-General CVD Risk Score."</p>
+          <div id="lipidOverrideGroup">
+            <label class="audit-item"><input type="checkbox" data-tier="veryhigh" value="established CVD"> Established CVD (known IHD, stroke, PAD, or significant atherosclerosis on imaging) &mdash; Very High</label>
+            <label class="audit-item"><input type="checkbox" data-tier="veryhigh" value="diabetes with CVD/TOD or &ge;3 CV risk factors"> Diabetes with CVD, other target-organ damage, or &ge;3 CV risk factors &mdash; Very High</label>
+            <label class="audit-item"><input type="checkbox" data-tier="veryhigh" value="CKD eGFR &lt;30"> CKD, eGFR &lt;30 mL/min/1.73m&sup2; &mdash; Very High</label>
+            <label class="audit-item"><input type="checkbox" data-tier="veryhigh" value="diabetes with proteinuria or a major CV risk factor"> Diabetes with proteinuria, or with a major risk factor (smoking/hypertension/dyslipidaemia) &mdash; Very High</label>
+            <label class="audit-item"><input type="checkbox" data-tier="extreme" value="recurrent CV event within 2 years despite LDL-C &lt;1.4"> Recurrent CV event within 2 years despite LDL-C &lt;1.4 mmol/L &mdash; Extreme risk, target &lt;1.0</label>
+            <label class="audit-item"><input type="checkbox" data-tier="high" value="diabetes &gt;10y duration without TOD plus &ge;1 other CV risk factor"> Diabetes &gt;10 years duration without target-organ damage, plus &ge;1 other CV risk factor &mdash; High</label>
+            <label class="audit-item"><input type="checkbox" data-tier="high" value="CKD eGFR 30-&lt;60"> CKD, eGFR 30&ndash;&lt;60 mL/min/1.73m&sup2; &mdash; High</label>
+            <label class="audit-item"><input type="checkbox" data-tier="high" value="very high individual risk factor (LDL-C &gt;4.9 or BP &ge;180/110)"> Very high individual risk factor (LDL-C &gt;4.9 mmol/L or BP &ge;180/110 mmHg) &mdash; High</label>
+            <label class="audit-item"><input type="checkbox" data-tier="intermediate" value="diabetic &lt;50y, &lt;10y duration, no other CV risk factors"> Diabetic &lt;50 years old, &lt;10 years duration, no other CV risk factors &mdash; at least Intermediate</label>
+            <label class="audit-item"><input type="checkbox" data-tier="high" value="Lp(a) &ge;125 nmol/L (&ge;50 mg/dL), known result"> Lp(a) &ge;125 nmol/L (&ge;50 mg/dL), if known &mdash; risk-enhancing factor, treat as at least High (2026 ACC/AHA Dyslipidemia Guideline)</label>
+          </div>
+          <p class="hint" style="margin-top:6px;"><strong>2026 update &mdash; Lp(a) universal screening:</strong> every adult should have Lp(a) measured at least once in their lifetime (fasting not required; do not repeat unless clinically indicated or the assay changes) &mdash; if this has never been done and testing is available via hospital referral, consider requesting a one-off Lp(a). &ge;125 nmol/L (&ge;50 mg/dL) is a risk-enhancing factor (tick the box above if the result is known); &ge;250 nmol/L confers approximately double the cardiovascular risk. Niacin is <strong>not recommended</strong> for Lp(a)-lowering (harm outweighs benefit). CPG Dyslipidaemia 2023 does not mandate Lp(a) testing &mdash; this is additional guidance from the newer guideline.</p>
+
+          <h4 style="margin:14px 0 4px 0; font-size:13px; color:var(--blue);">3. Current lipid-lowering therapy (this facility's formulary)</h4>
+          <div class="grid grid-2">
+            <label>Current agent
+              <select id="lipidCurrentAgent">
+                <option value="none">Not on any lipid-lowering agent</option>
+                <option value="simva10">T. Simvastatin 10mg</option>
+                <option value="simva20">T. Simvastatin 20mg</option>
+                <option value="simva40">T. Simvastatin 40mg</option>
+                <option value="atorva20">T. Atorvastatin 20mg</option>
+                <option value="atorva40">T. Atorvastatin 40mg</option>
+                <option value="atorva60">T. Atorvastatin 60mg</option>
+                <option value="atorva80">T. Atorvastatin 80mg</option>
+                <option value="prava20">T. Pravastatin 20mg</option>
+                <option value="rosuva20">T. Rosuvastatin 20mg</option>
+                <option value="ezetimibe10">T. Ezetimibe 10mg (non-statin add-on)</option>
+                <option value="gemfibrozil300">T. Gemfibrozil 300mg (fibrate)</option>
+                <option value="fenofibrate145">T. Fenofibrate 145mg (fibrate)</option>
+              </select>
+            </label>
+            <label>Current LDL-C, if known (mmol/L)
+              <input type="number" step="0.1" id="lipidCurrentLdl" placeholder="e.g. 2.9">
+            </label>
+          </div>
+          <div class="grid grid-2">
+            <label>Apo-B, if known
+              <input type="number" step="0.01" id="lipidApoB" placeholder="e.g. 0.70">
+            </label>
+            <label>Apo-B unit
+              <select id="lipidApoBUnit">
+                <option value="gL">g/L</option>
+                <option value="mgdl">mg/dL</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="myMaat-summary-box" style="margin-top:12px;">
+            <p id="lipidPointsHint" class="hint" style="margin:2px 0;"></p>
+            <p>Risk category: <strong id="lipidCategoryHint">--</strong></p>
+            <p id="lipidTargetHint" class="hint" style="margin:2px 0;"></p>
+            <p id="lipidStatinHint" class="hint" style="margin:6px 0;"></p>
+            <p id="lipidSuitabilityHint" class="hint" style="margin:6px 0; font-weight:600;"></p>
+            <p id="lipidApoBHint" class="hint" style="margin:6px 0;"></p>
+          </div>
+
+          <label>Lipid-lowering therapy assessment summary (auto-filled &mdash; edit as needed)
+            <div class="field-with-dictate"><textarea id="lipidSummary" rows="3"></textarea><button type="button" class="mic-btn" data-target="lipidSummary">&#127908;</button></div>
+          </label>
+          <button type="button" id="lipidResetBtn" class="secondary-btn">Reset Lipid-Lowering Therapy Advisor</button>
+
+          <p class="hint" style="margin-top:10px;"><strong>Statin intensity (Table 12/Table 6):</strong> High-intensity (&ge;50% LDL-C reduction) &mdash; Atorvastatin 40&ndash;80mg, Rosuvastatin 20&ndash;40mg. Moderate-intensity (30&ndash;49%) &mdash; Atorvastatin 10&ndash;20mg, Simvastatin 20&ndash;40mg, Pravastatin 40&ndash;80mg. Low-intensity (&lt;30%) &mdash; Simvastatin 10mg, Pravastatin 10&ndash;20mg. This facility's Pravastatin 20mg tablet is therefore Low-intensity only (Moderate needs 40&ndash;80mg, not stocked as a single tablet strength here). Very High/High risk should be on a maximally tolerated statin dose. Ezetimibe 10mg is an add-on once on a maximally tolerated statin with LDL-C still above target (or first-line in statin-intolerant patients), not a substitute for statin therapy. Gemfibrozil and Fenofibrate are fibrates for severe hypertriglyceridaemia, not primary LDL-lowering/ASCVD-risk agents &mdash; if a fibrate must be combined with a statin, Fenofibrate is safer than Gemfibrozil (Gemfibrozil substantially raises myopathy/rhabdomyolysis risk by inhibiting statin glucuronidation).</p>
+        </details>
+      </div>
+      <label>Serum Creatinine (SrCreat)
+        <div class="grid grid-2" style="gap:6px;">
+          <div class="field-with-dictate"><input type="text" id="srCreat" placeholder="e.g. 88"><button type="button" class="mic-btn" data-target="srCreat">&#127908;</button></div>
+        <div class="phrase-bank" data-target="srCreat" data-sep="; ">
+          <button type="button" class="phrase-btn">Not done</button>
+          <button type="button" class="phrase-btn">Pending</button>
+        </div>
+          <select id="srCreatUnit">
+            <option value="umol">&micro;mol/L</option>
+            <option value="mgdl">mg/dL</option>
+          </select>
+        </div>
+      </label>
+      <label>Age / Sex (for eGFR calculation only)
+        <div class="grid grid-2" style="gap:6px;">
+          <input type="number" id="egfrCalcAge" min="18" max="120" placeholder="Age e.g. 58">
+          <select id="egfrCalcSex">
+            <option value="">Sex&hellip;</option>
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+          </select>
+        </div>
+      </label>
+      <div class="full" style="margin-bottom:6px;">
+        <p id="egfrCalcHint" class="hint" style="margin:0 0 4px 0;"></p>
+        <button type="button" id="egfrCalcInsertBtn" class="secondary-btn" style="display:none;">Insert calculated eGFR into eGFR field below</button>
+      </div>
+      <label>eGFR / renal function
+        <div class="field-with-dictate"><input type="text" id="egfr" placeholder="e.g. 62 mL/min/1.73m2"><button type="button" class="mic-btn" data-target="egfr">&#127908;</button></div>
+        <div class="phrase-bank" data-target="egfr" data-sep="; ">
+          <button type="button" class="phrase-btn">Not done</button>
+          <button type="button" class="phrase-btn">Not reported by lab</button>
+        </div>
+      </label>
+      <label>UACR / albuminuria
+        <div class="field-with-dictate"><input type="text" id="uacr" placeholder="e.g. 18 mg/g"><button type="button" class="mic-btn" data-target="uacr">&#127908;</button></div>
+        <div class="phrase-bank" data-target="uacr" data-sep="; ">
+          <button type="button" class="phrase-btn">Not done</button>
+          <button type="button" class="phrase-btn">Pending</button>
+          <button type="button" class="phrase-btn">Outsourced to Hospital Seberang Jaya</button>
+        </div>
+      </label>
+      <label class="full">Albuminuria calculator (optional &mdash; converts ACR/AER to mg/g and inserts into UACR field above)
+        <div class="grid grid-3" style="gap:6px;">
+          <select id="acrType">
+            <option value="acr_mgg">ACR (mg/g)</option>
+            <option value="acr_mgmmol">ACR (mg/mmol)</option>
+            <option value="aer_mg24h">AER (mg/24h)</option>
+          </select>
+          <input type="number" step="0.1" id="acrValue" placeholder="e.g. 45">
+        </div>
+      </label>
+      <div class="full" style="margin-bottom:6px;">
+        <p id="acrCalcHint" class="hint" style="margin:0 0 4px 0;"></p>
+        <button type="button" id="acrCalcInsertBtn" class="secondary-btn" style="display:none;">Insert into UACR field above</button>
+      </div>
+      <div class="full">
+        <details class="myMaat-module">
+          <summary>Urine PCI (uPCR) / 24-hour urine protein &rarr; UACR A-stage converter (tap to open)</summary>
+          <p class="hint">Our laboratory reports Urine PCI (urine protein-creatinine index, i.e. uPCR) but UACR has to be outsourced to Hospital Seberang Jaya, so this maps a spot PCI <em>or</em> a 24-hour urine protein (PER) result onto the KDIGO albuminuria (A) category, so you can still stage the patient and place them on the heat map above.</p>
+          <div class="grid grid-2" style="gap:6px;">
+            <label>Urine protein value
+              <input type="number" step="0.01" id="pciValue" placeholder="e.g. 220">
+            </label>
+            <label>Measurement / unit
+              <select id="pciUnit">
+                <option value="mgg">Spot PCI / uPCR &mdash; mg/g</option>
+                <option value="mgmmol">Spot PCI / uPCR &mdash; mg/mmol</option>
+                <option value="gmol">Spot PCI / uPCR &mdash; g/mol</option>
+                <option value="per_mg24h">24-hour urine protein (PER) &mdash; mg/24h</option>
+                <option value="per_g24h">24-hour urine protein (PER) &mdash; g/24h</option>
+              </select>
+            </label>
+          </div>
+          <div class="myMaat-summary-box" style="margin-top:10px;">
+            <p id="pciResultHint" class="hint" style="margin:2px 0;"></p>
+            <p id="pciBandHint" style="margin:4px 0;"></p>
+            <p id="pciEstimateHint" class="hint" style="margin:2px 0;"></p>
+          </div>
+          <button type="button" id="pciInsertBtn" class="secondary-btn" style="display:none;">Insert A-stage note into UACR field above</button>
+          <button type="button" id="pciResetBtn" class="secondary-btn">Reset PCI converter</button>
+          <p class="hint" style="margin-top:10px;"><strong>How this works &mdash; and its limits.</strong> This uses KDIGO's own published <em>approximate</em> equivalence between proteinuria and albuminuria categories (KDIGO CKD Guideline, "Relationship among categories of albuminuria and proteinuria" table, reproduced e.g. as Table 22.1 in <em>Diabetes in America</em>, 3rd Ed., NIDDK 2018): spot PCR &lt;150 mg/g (&lt;15 mg/mmol) <em>or</em> 24-hour PER &lt;150 mg/24h &asymp; <strong>A1</strong>; PCR 150&ndash;500 mg/g (15&ndash;50 mg/mmol) or PER 150&ndash;500 mg/24h &asymp; <strong>A2</strong>; PCR &gt;500 mg/g (&gt;50 mg/mmol) or PER &gt;500 mg/24h &asymp; <strong>A3</strong>. (KDIGO's table gives spot PCR in mg/g and 24-hour PER in mg/24h the same numeric cut-points, which is why both feed this one tool.) Note these bands are <em>not</em> the same numbers as the ACR bands (ACR uses &lt;30 / 30&ndash;300 / &gt;300 mg/g) &mdash; a PCI of 200 mg/g is A2, not A2-by-the-ACR-scale, so don't type a PCI value straight into the UACR field. <em>Important caveats:</em> KDIGO and CPG T2DM both state ACR is the preferred measure because proteinuria includes non-albumin protein and the PCR&ndash;ACR relationship is non-linear and inconsistent at low values; CPG T2DM 6th Ed. 2020 does accept uPCR for <em>monitoring treatment response in established proteinuria</em> on cost-effectiveness grounds. Published numeric PCR&rarr;ACR conversion equations exist (Sumida K et al., <em>Ann Intern Med</em> 2020;173:426&ndash;435, developed in ~919,000 adults) but are spline-based and require sex/diabetes/hypertension terms, and the authors themselves note the relationship is unreliable below PCR 50 mg/g &mdash; so this tool deliberately gives you the <strong>category</strong> rather than inventing a single fake ACR number. If an exact UACR is needed (e.g. for a treatment threshold that hinges on ACR &ge;200 or &ge;300), send the sample to Hospital Seberang Jaya rather than relying on a conversion.</p>
+        </details>
+      </div>
+      <label class="full" style="margin-bottom:6px;">
+        <p id="ckdStageHint" class="hint" style="margin:0;"></p>
+      </label>
+      <div class="full" id="ckdHeatMapWrap" style="margin:2px 0 10px 0;">
+        <p class="hint" style="margin:0 0 4px 0;"><strong>KDIGO CKD Heat Map</strong> (G stage &times; A stage &rarr; risk zone; KDIGO 2026 Diabetes &amp; CKD Guideline Update, Public Review Draft March 2026, combined-risk grid) &mdash; your patient's cell is outlined below once both eGFR and UACR are entered above.</p>
+        <table id="ckdHeatMap" class="ckd-heatmap">
+          <thead>
+            <tr><th></th><th>A1 &lt;30 mg/g</th><th>A2 30&ndash;300 mg/g</th><th>A3 &gt;300 mg/g</th></tr>
+          </thead>
+          <tbody>
+            <tr><th>G1 &ge;90</th><td data-cell="G1-A1" class="risk-low"></td><td data-cell="G1-A2" class="risk-mod"></td><td data-cell="G1-A3" class="risk-high"></td></tr>
+            <tr><th>G2 60&ndash;89</th><td data-cell="G2-A1" class="risk-low"></td><td data-cell="G2-A2" class="risk-mod"></td><td data-cell="G2-A3" class="risk-high"></td></tr>
+            <tr><th>G3a 45&ndash;59</th><td data-cell="G3a-A1" class="risk-mod"></td><td data-cell="G3a-A2" class="risk-high"></td><td data-cell="G3a-A3" class="risk-veryhigh"></td></tr>
+            <tr><th>G3b 30&ndash;44</th><td data-cell="G3b-A1" class="risk-high"></td><td data-cell="G3b-A2" class="risk-veryhigh"></td><td data-cell="G3b-A3" class="risk-veryhigh"></td></tr>
+            <tr><th>G4 15&ndash;29</th><td data-cell="G4-A1" class="risk-veryhigh"></td><td data-cell="G4-A2" class="risk-veryhigh"></td><td data-cell="G4-A3" class="risk-veryhigh"></td></tr>
+            <tr><th>G5 &lt;15</th><td data-cell="G5-A1" class="risk-veryhigh"></td><td data-cell="G5-A2" class="risk-veryhigh"></td><td data-cell="G5-A3" class="risk-veryhigh"></td></tr>
+          </tbody>
+        </table>
+        <p class="hint" style="margin:4px 0 0 0;"><span class="heatmap-legend-swatch risk-low"></span>Green = Low risk &nbsp; <span class="heatmap-legend-swatch risk-mod"></span>Yellow = Moderately increased risk &nbsp; <span class="heatmap-legend-swatch risk-high"></span>Orange = High risk &nbsp; <span class="heatmap-legend-swatch risk-veryhigh"></span>Red = Very high risk.</p>
+        <div id="ckdColorFlagBox" class="ckd-flag-box" style="display:none;"></div>
+      </div>
+      <div class="full">
+        <details class="myMaat-module">
+          <summary>CKD 4 Pillars of Protection &mdash; RAASi &rarr; SGLT2i &rarr; Finerenone &rarr; GLP-1RA sequencing (tap to open)</summary>
+          <p class="hint">Adapted from the "4 Pillars of CKD Protection" sequencing summary (Dr Nixon Goyal, CKD 2024&ndash;26 Update Series), cross-checked against KDIGO 2024 CKD Guideline (<em>Kidney Int.</em> 2024;105[4S]), KDIGO 2022 Diabetes in CKD Guideline (102[5S]), and the KDIGO 2026 Diabetes &amp; CKD Guideline Update (Public Review Draft, March 2026) already used for the heat map above. Uses the eGFR/UACR you entered above &mdash; enter Potassium and tick what the patient is already on to see what's indicated next.</p>
+          <div class="grid grid-2">
+            <label>Serum Potassium (K&#8314;, mmol/L)
+              <input type="number" step="0.1" id="ckdPotassium" placeholder="e.g. 4.6">
+            </label>
+            <label class="audit-item" style="align-self:end;"><input type="checkbox" id="ckdHeartFailure"> Heart failure (any type)</label>
+          </div>
+          <p class="hint" style="margin:8px 0 2px 0;">Currently on (tick all that apply):</p>
+          <div class="grid grid-2">
+            <label class="audit-item"><input type="checkbox" id="ckdOnRaasi"> RAASi (ACEi or ARB)</label>
+            <label class="audit-item"><input type="checkbox" id="ckdOnSglt2i"> SGLT2 inhibitor</label>
+            <label class="audit-item"><input type="checkbox" id="ckdOnFinerenone"> Finerenone</label>
+            <label class="audit-item"><input type="checkbox" id="ckdOnGlp1"> GLP-1 receptor agonist</label>
+          </div>
+          <div class="myMaat-summary-box" style="margin-top:10px;">
+            <p id="ckdPillar1Hint" class="hint" style="margin:2px 0;"></p>
+            <p id="ckdPillar2Hint" class="hint" style="margin:2px 0;"></p>
+            <p id="ckdPillar3Hint" class="hint" style="margin:2px 0;"></p>
+            <p id="ckdPillar4Hint" class="hint" style="margin:2px 0;"></p>
+          </div>
+          <label>CKD pillars sequencing summary (auto-filled &mdash; edit as needed)
+            <div class="field-with-dictate"><textarea id="ckdPillarsSummary" rows="3"></textarea><button type="button" class="mic-btn" data-target="ckdPillarsSummary">&#127908;</button></div>
+          </label>
+          <button type="button" id="ckdPillarsResetBtn" class="secondary-btn">Reset CKD 4 Pillars tool</button>
+          <p class="hint" style="margin-top:10px;"><strong>Guardrails:</strong> add one pillar at a time, 2&ndash;4 weeks apart, so any side effect is attributable &mdash; recheck labs after each. RAASi: titrate to max tolerated dose; a creatinine rise up to 30% after starting/up-titrating is acceptable, don't stop; continue even when eGFR falls below 30; recheck K&#8314; and creatinine 2&ndash;4 weeks after each titration; never combine ACEi+ARB+direct renin inhibitor. SGLT2i: expect an early reversible eGFR dip (up to 30%); continue below eGFR 20 until dialysis; hold on sick days/surgery/fasting with poor oral intake. Finerenone: continue if K&#8314; &le;5.5, hold if &gt;5.5, restart when &le;5.0; recheck K&#8314; ~4 weeks after starting; hyperkalaemia risk 14% vs 6.9% placebo (FIDELIO/FIGARO). GLP-1RA: FLOW trial (semaglutide 1mg weekly) showed kidney + CV benefit in T2D + CKD + albuminuria, with or without baseline SGLT2i. Benefits of the 4 pillars are largely additive (each targets a different pathway) &mdash; this is a calculation/sequencing aid, not a substitute for clinical judgement or nephrology input for complex cases.</p>
+        </details>
+      </div>
+      <label>Weight / BMI
+        <div class="field-with-dictate"><input type="text" id="weightBmi" placeholder="e.g. 72kg, BMI 27.4, target BW after 10% reduction 65kg"><button type="button" class="mic-btn" data-target="weightBmi">&#127908;</button></div>
+      </label>
+      <label class="full" style="margin-bottom:6px;">
+        <p id="bmiCategoryHint" class="hint" style="margin:0;"></p>
+      </label>
+      <div class="full">
+        <div id="weightLossTargetHint" class="ckd-flag-box" style="display:none;"></div>
+        <label class="audit-item" id="weightLossCounselledWrap"><input type="checkbox" id="weightLossCounselled"> Weight-loss target <strong>discussed with patient</strong> (adds the kg figures to both notes)</label>
+      </div>
+      <label>Waist circumference (WC)
+        <div class="field-with-dictate"><input type="text" id="waistCircumference" placeholder="e.g. 96 cm"><button type="button" class="mic-btn" data-target="waistCircumference">&#127908;</button></div>
+        <div class="phrase-bank" data-target="waistCircumference" data-sep="; ">
+          <button type="button" class="phrase-btn">Not measured</button>
+        </div>
+      </label>
+      <label>LFT (if relevant, e.g. statin safety)
+        <div class="field-with-dictate"><input type="text" id="lft" placeholder="e.g. WNL"><button type="button" class="mic-btn" data-target="lft">&#127908;</button></div>
+        <div class="phrase-bank" data-target="lft" data-sep="; ">
+          <button type="button" class="phrase-btn">WNL</button>
+          <button type="button" class="phrase-btn">Not done</button>
+          <button type="button" class="phrase-btn">Mildly raised transaminases</button>
+          <button type="button" class="phrase-btn">ALT &gt;3x ULN</button>
+        </div>
+      </label>
+      <div class="full" id="fib4FlagWrap">
+        <div id="fib4FlagBox" class="ckd-flag-box" style="display:none;"></div>
+      </div>
+      <div class="full">
+        <details class="myMaat-module" id="fib4Module">
+          <summary>FIB-4 (Fibrosis-4) MASLD screening calculator (tap to open)</summary>
+          <p class="hint">FIB-4 risk-stratifies for advanced liver fibrosis in metabolic dysfunction-associated steatotic liver disease (MASLD, previously NAFLD/MAFLD) &mdash; highly prevalent in T2DM (about 49.6&ndash;72.4% in Malaysian T2DM patients, with advanced fibrosis in roughly 21%). Source: CPG Management of T2DM, 6th Ed. 2020, Appendix 9 and Tables 3-37/3-38. The CPG's Recommendation 1 (Grade A) is that <strong>all</strong> T2DM patients should have platelet count, ALT and AST performed to assess for NASH and advanced fibrosis, repeated <strong>annually</strong> or more often as indicated &mdash; so a missing or &gt;1-year-old ALT/AST/FBC is itself a gap worth flagging.</p>
+          <div class="grid grid-2">
+            <label>Age (years)
+              <input type="number" id="fib4Age" min="18" max="120" placeholder="e.g. 58">
+            </label>
+            <label>Platelet count (&times;10&sup9;/L)
+              <input type="number" step="1" id="fib4Platelets" placeholder="e.g. 250">
+            </label>
+            <label>AST (U/L)
+              <input type="number" step="0.1" id="fib4Ast" placeholder="e.g. 32">
+            </label>
+            <label>ALT (U/L)
+              <input type="number" step="0.1" id="fib4Alt" placeholder="e.g. 45">
+            </label>
+          </div>
+          <label class="audit-item" style="margin-top:6px;"><input type="checkbox" id="fib4LabsStale"> ALT/AST/platelets <strong>not done in the past 12 months</strong> (or not available)</label>
+          <label class="audit-item"><input type="checkbox" id="fib4LftElevated"> ALT and/or AST <strong>above your lab's reference range</strong></label>
+          <label class="audit-item"><input type="checkbox" id="fib4LftPersistent"> ALT and/or AST <strong>persistently</strong> elevated (on &ge;2 occasions)</label>
+          <div class="myMaat-summary-box" style="margin-top:10px;">
+            <p id="fib4ScoreHint" class="hint" style="margin:2px 0;"></p>
+            <p id="fib4RiskHint" style="margin:4px 0;"></p>
+            <p id="fib4ActionHint" class="hint" style="margin:2px 0;"></p>
+          </div>
+          <label>FIB-4 / MASLD screening summary (auto-filled &mdash; edit as needed)
+            <div class="field-with-dictate"><textarea id="fib4Summary" rows="2"></textarea><button type="button" class="mic-btn" data-target="fib4Summary">&#127908;</button></div>
+          </label>
+          <button type="button" id="fib4UseAgeBtn" class="secondary-btn">Copy age from the eGFR calculator</button>
+          <button type="button" id="fib4ResetBtn" class="secondary-btn">Reset FIB-4 calculator</button>
+          <p class="hint" style="margin-top:10px;"><strong>Formula (CPG T2DM 6th Ed., Appendix 9B):</strong> FIB-4 = [age (years) &times; AST (U/L)] &divide; [platelet count (&times;10&sup9;/L) &times; &radic;ALT (U/L)]. <strong>Interpretation:</strong> &lt;1.3 = low risk for advanced fibrosis (repeat FIB-4 every 2&ndash;3 years per Table 3-37); &ge;1.3 = intermediate-to-high risk &mdash; refer for liver stiffness measurement (transient elastography/FibroScan) and consider Gastroenterology/Hepatology referral. Where ALT and/or AST are elevated, also arrange an ultrasound of the liver to confirm steatosis and exclude a focal lesion, and exclude other causes (alcohol &mdash; more than two standard drinks/day for men or one for women, hepatitis B/C, and drug-induced liver injury from prescribed, OTC or traditional medicines/supplements). <em>Caveat:</em> a normal ALT/AST does <em>not</em> exclude NASH or advanced fibrosis, and FIB-4 loses accuracy at the extremes of age &mdash; it is a triage score, not a diagnosis.</p>
+        </details>
+      </div>
+      <label>UFEME (if relevant)
+        <div class="field-with-dictate"><input type="text" id="ufeme" placeholder="e.g. WNL"><button type="button" class="mic-btn" data-target="ufeme">&#127908;</button></div>
+        <div class="phrase-bank" data-target="ufeme" data-sep="; ">
+          <button type="button" class="phrase-btn">WNL</button>
+          <button type="button" class="phrase-btn">Not done</button>
+          <button type="button" class="phrase-btn">Protein nil</button>
+          <button type="button" class="phrase-btn">Protein trace</button>
+          <button type="button" class="phrase-btn">Protein 1+</button>
+          <button type="button" class="phrase-btn">Protein 2+</button>
+          <button type="button" class="phrase-btn">Protein 3+</button>
+          <button type="button" class="phrase-btn">Protein 4+</button>
+          <button type="button" class="phrase-btn">Glucose nil</button>
+          <button type="button" class="phrase-btn">Glucose trace</button>
+          <button type="button" class="phrase-btn">Glucose 1+</button>
+          <button type="button" class="phrase-btn">Glucose 2+</button>
+          <button type="button" class="phrase-btn">Glucose 3+</button>
+          <button type="button" class="phrase-btn">Glucose 4+</button>
+          <button type="button" class="phrase-btn">Ketone +</button>
+          <button type="button" class="phrase-btn">Blood +</button>
+          <button type="button" class="phrase-btn">Leucocytes +</button>
+          <button type="button" class="phrase-btn">Nitrite +</button>
+        </div>
+      </label>
+      <label class="full">Therapeutic targets set/reviewed (HbA1c / BP / lipid, etc.)
+        <div class="field-with-dictate"><input type="text" id="therapeuticTargets" placeholder="e.g. HbA1c target <7% (individualised tier - see hint), BP <130/80, LDL-C target per CV risk tier (see hint)"><button type="button" class="mic-btn" data-target="therapeuticTargets">&#127908;</button></div>
+        <div class="phrase-bank" data-target="therapeuticTargets" data-sep="; ">
+          <button type="button" class="phrase-btn">HbA1c 6.6&ndash;7.0%</button>
+          <button type="button" class="phrase-btn">HbA1c &le;6.5%</button>
+          <button type="button" class="phrase-btn">BP 130&ndash;139/70&ndash;79 mmHg</button>
+          <button type="button" class="phrase-btn">LDL-C &le;1.8 mmol/L</button>
+          <button type="button" class="phrase-btn">LDL-C &lt;2.6 mmol/L</button>
+          <button type="button" class="phrase-btn">HbA1c 7.1&ndash;8.0% (less tight)</button>
+          <button type="button" class="phrase-btn">BP &lt;130/80 mmHg (DKD/CKD)</button>
+          <button type="button" class="phrase-btn">BP &lt;140/90 mmHg (elderly)</button>
+          <button type="button" class="phrase-btn">LDL-C &le;1.4 mmol/L</button>
+          <button type="button" class="phrase-btn">TG &lt;1.7 mmol/L</button>
+        </div>
+      </label>
+      <div class="full">
+        <div id="ckmStageHint" class="ckd-flag-box" style="display:none; background:var(--blue-50); border-color:var(--blue-200); border-left-color:var(--blue); color:var(--text);"></div>
+        <details class="ref-accordion">
+          <summary>CKM syndrome staging &mdash; what the stages mean</summary>
+          <p class="hint"><strong>Cardiovascular-Kidney-Metabolic (CKM) syndrome staging</strong> &mdash; 2026 AHA/ACC/ADA/ASN Guideline (Ndumele CE et al., <em>Circulation</em> 2026;154:e50&ndash;e158). Derived automatically from the BMI, waist circumference, HbA1c, BP, triglycerides, eGFR/UACR and comorbidities already entered above.<br><br>
+          <strong>Stage 0</strong> &mdash; no CKM risk factors.<br>
+          <strong>Stage 1</strong> &mdash; excess or dysfunctional adiposity alone: BMI &ge;23 kg/m&sup2; or waist &ge;80 cm (women) / &ge;90 cm (men) using the Asian-ancestry cut-offs, or prediabetic glycaemia (HbA1c 5.7&ndash;6.4%).<br>
+          <strong>Stage 2</strong> &mdash; metabolic risk factors and/or moderate-to-high-risk CKD: hypertension (SBP &ge;130 or DBP &ge;80, or on antihypertensives), triglycerides &ge;1.7 mmol/L (150 mg/dL), metabolic syndrome, T2D (HbA1c &ge;6.5%), and/or KDIGO moderate-to-high-risk CKD.<br>
+          <strong>Stage 3</strong> &mdash; subclinical CVD, or a risk equivalent: very-high-risk CKD (G4&ndash;G5 or KDIGO very high risk), or predicted 10-year CVD risk &ge;20%.<br>
+          <strong>Stage 4</strong> &mdash; clinical CVD (coronary heart disease, heart failure, stroke, PAD, atrial fibrillation). <strong>4a</strong> without kidney failure, <strong>4b</strong> with kidney failure (eGFR &lt;15 or on kidney replacement therapy).<br><br>
+          <em>Note for DMTAC:</em> every patient here has T2D, so all are <strong>at least stage 2</strong> by definition. The value of the staging is in catching the step up to stage 3 or 4, and in setting the right monitoring interval &mdash; stage 1 every 2&ndash;3 years, stage 2 onward <strong>yearly</strong> for lipids, glycaemia, eGFR and UACR, with anthropometrics and BP annually at every stage.<br><br>
+          <em>Units:</em> the guideline is written in mg/dL; thresholds above are converted to the mmol/L this template uses (TG 150 mg/dL = 1.7 mmol/L). Subclinical-CVD markers the guideline also lists &mdash; coronary artery calcium score &ge;100, NT-proBNP &ge;125 pg/mL, hs-troponin &mdash; are not routinely available at this facility and are therefore not used here; a patient meeting those on hospital testing would also be stage 3.</p>
+        </details>
+      </div>
+      <div class="full" id="auditAnchorCpg"></div>
+      <div class="full ref-accordion-group">
+      <p class="hint">Guideline reference tables (tap to open only when you need them):</p>
+      <details class="ref-accordion"><summary>Individualised HbA1c target</summary>
+      <p class="hint"><strong>Individualised HbA1c target (KKM CPG T2DM 6th Ed. Table 3-6 / DMTAC Protocol 3rd Ed. Table 1):</strong> &le;6.5% "tight" &mdash; newly/recently diagnosed, younger, healthier, no hypoglycaemia-prone medication, low hypo risk. 6.6&ndash;7.0% &mdash; all others. 7.1&ndash;8.0% "less tight" &mdash; elderly, advanced CVD/CAD/heart failure, advanced renal failure (eGFR &lt;45), decompensated liver disease, dementia, bed-bound, prone to/experiencing severe hypoglycaemia or hypoglycaemia unawareness, high consequence of hypoglycaemia (falls risk, drivers/machinery operators), or short life expectancy. <em>Cross-check note:</em> NICE (UK) uses a somewhat different framework &mdash; a single default target of 48 mmol/mol (6.5%) on lifestyle/non-hypo-risk therapy, relaxing to 53 mmol/mol (7.0%) once on a hypoglycaemia-risk medicine, with individualisation discussed via a shared decision-making tool rather than the 3-tier table above; use the KKM table for local practice and note NICE only if directly relevant (e.g. a patient/guideline comparison is requested).</p>
+      </details>
+      <details class="ref-accordion"><summary>eGFR calculation (CKD-EPI 2021)</summary>
+      <p class="hint"><strong>eGFR calculation (CKD-EPI 2021, race-free):</strong> Enter Serum Creatinine, Age, and Sex above, and the calculated eGFR appears as a hint next to the "Insert calculated eGFR" button &mdash; click it to copy the value into the eGFR field (it will not overwrite anything already typed there without you clicking it). Formula: eGFR = 142 &times; min(Scr/&kappa;, 1)<sup>&alpha;</sup> &times; max(Scr/&kappa;, 1)<sup>-1.200</sup> &times; 0.9938<sup>age</sup> &times; (1.012 if female), where &kappa; = 0.7 (female) or 0.9 (male), &alpha; = -0.241 (female) or -0.302 (male), and Scr is in mg/dL (the app converts automatically if you select &micro;mol/L). Source: Inker LA et al., "New Creatinine- and Cystatin C-Based Equations to Estimate GFR without Race," <em>NEJM</em> 2021 &mdash; the equation endorsed by KDIGO and currently recommended by NKF/ASN for GFR reporting. This is a calculation aid, not a substitute for a laboratory-reported eGFR when one is available.</p>
+      </details>
+      <details class="ref-accordion"><summary>LDL-C target by CV risk category</summary>
+      <p class="hint"><strong>LDL-C target by CV risk category (CPG Dyslipidaemia 6th Ed. 2023, Table 4):</strong> Low risk (&lt;10% 10-yr CVD risk) &mdash; &lt;3.0 mmol/L (clinical judgement on drug therapy). Intermediate (10&ndash;20%; diabetes &lt;50y, &lt;10y duration, no CV risk factor) &mdash; &lt;2.6 mmol/L. High risk (&gt;20%; diabetes &gt;10y duration without target organ damage plus 1 other CV risk factor; CKD eGFR 30&ndash;&lt;60) &mdash; &le;1.8 mmol/L and &ge;50% reduction from baseline. Very high risk (established CVD; diabetes with CVD/target organ damage or &gt;3 CV risk factors; CKD eGFR &lt;30) &mdash; &le;1.4 mmol/L and &ge;50% reduction from baseline. Diabetes with proteinuria or a major risk factor (smoking/hypertension/dyslipidaemia) is classified very high risk regardless of the 10-year score.</p>
+      </details>
+      <details class="ref-accordion"><summary>BP target by population group</summary>
+      <p class="hint"><strong>BP target by population group (CPG T2DM 6th Ed. 2020 Table 3-5/3-6 &amp; Table 6-2; CPG Management of Hypertension 5th Ed. 2018; MDES Diabetes Education Manual):</strong> Diabetes, general &mdash; SBP 130&ndash;139 mmHg (may target &lt;130 if tolerated in those without pre-existing coronary heart disease who are at higher risk of stroke/diabetic kidney disease, but not &lt;120), DBP 70&ndash;79 mmHg (not &lt;70). Diabetic kidney disease/CKD (any albuminuria level) &mdash; &le;130/80 mmHg (SBP not &lt;120, DBP not &lt;70). Elderly with diabetes, healthy or complex/intermediate health &mdash; &lt;140/90 mmHg; very complex/poor health (long-term care, end-stage illness, or moderate-severe cognitive/functional impairment) &mdash; &lt;150/90 mmHg, individualised. <em>Source note:</em> the CPG on Hypertension's own diabetes-specific recommendation (&lt;140/80 mmHg, with &lt;130/80 mmHg considered in younger/higher-risk patients) is slightly less tight than the CPG T2DM/MDES manual's 130&ndash;139/70&ndash;79 mmHg figure &mdash; both are legitimate current Malaysian guidance; this template defaults to the CPG T2DM figure as the diabetes-specific target, since that's the primary guideline for this clerking, but either wording is acceptable to document.</p>
+      </details>
+      <details class="ref-accordion"><summary>Waist circumference reference</summary>
+      <p class="hint"><strong>Waist circumference reference (CPG T2DM 6th Ed. 2020, Table 2-1):</strong> Central obesity/increased metabolic risk at &ge;90 cm for men and &ge;80 cm for women (Asian cut-offs used alongside BMI &ge;23 kg/m&sup2; as overweight/obesity screening criteria for T2DM/prediabetes). Measured at each initial visit and, per the CPG's clinical monitoring schedule (Table 3-24), at every follow-up visit.</p>
+      </details>
+      <details class="ref-accordion"><summary>BMI classification (Asian cut-offs)</summary>
+      <p class="hint"><strong>BMI classification (CPG Management of Obesity, 2nd Ed. 2023, Table 2-1 &mdash; Asian cut-offs):</strong> Underweight &lt;18.5 (low, but increased risk of other clinical problems); Normal 18.5&ndash;22.9 (optimal); Pre-obese/Overweight 23.0&ndash;27.4 (increased risk); Obese I 27.5&ndash;32.4 (high risk); Obese II 32.5&ndash;37.4 (very high risk); Obese III &ge;37.5 (extremely high risk). Type "BMI" followed by the number in the Weight/BMI field above (e.g. "BMI 27.4") to auto-label the category below it. <em>Source note:</em> the CPG T2DM 6th Ed. 2020's own BMI table (Table 3-32) instead cites the older 2004 Malaysian Obesity CPG's wider bands (Obese I 27.5&ndash;34.9, Obese II 35.0&ndash;39.9, Obese III &ge;40.0) &mdash; this app uses the newer, tighter 2023 Obesity CPG cut-offs since that's the current dedicated obesity guideline and the one referenced for this feature, but be aware the older bands are still what CPG T2DM's own table shows.</p>
+      </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PHARMACOTHERAPY REVIEW ============ -->
+  <section class="card">
+    <h2>Pharmacotherapy Review</h2>
+    <p class="hint">Per DMTAC teaching guide: review outcome of previous intervention, then current assessment/findings by topic below, feeding into the care plan. Assess adherence both objectively (MyMAAT) and subjectively.</p>
+
+    <div class="subsection">
+      <h3>Outcome of Previous DMTAC Intervention</h3>
+      <div class="field-with-dictate"><textarea id="prevInterventionOutcome" aria-label="Outcome of previous DMTAC intervention" rows="2"></textarea><button type="button" class="mic-btn" data-target="prevInterventionOutcome">&#127908;</button></div>
+      <div class="phrase-bank" data-target="prevInterventionOutcome">
+        <button type="button" class="phrase-btn">Partial improvement since last intervention.</button>
+          <button type="button" class="phrase-btn">Previous intervention effective; improvement sustained.</button>
+          <button type="button" class="phrase-btn">No improvement since last intervention.</button>
+          <button type="button" class="phrase-btn">Adherence improved following counselling.</button>
+          <button type="button" class="phrase-btn">First DMTAC visit &mdash; not applicable.</button>
+          <button type="button" class="phrase-btn">Patient did not act on the previous advice.</button>
+          <button type="button" class="phrase-btn">Previous recommendation was not implemented by the prescriber.</button>
+          <button type="button" class="phrase-btn">Injection technique improved on reassessment.</button>
+      </div>
+    </div>
+
+    <!-- 1. Medication adherence -->
+    <div class="subsection">
+      <h3>1. Medication Adherence</h3>
+      <label>Quick adherence screen (routine follow-up)
+        <select id="quickAdherenceScreen">
+          <option value="">-- not assessed --</option>
+          <option value="Good adherence reported.">Good adherence reported</option>
+          <option value="Some adherence issues reported.">Some adherence issues reported</option>
+          <option value="Significant adherence issues reported.">Significant adherence issues reported</option>
+        </select>
+      </label>
+      <label>Adherence behaviour / reason for non-adherence
+        <div class="field-with-dictate"><textarea id="adherenceBehaviour" rows="2"></textarea><button type="button" class="mic-btn" data-target="adherenceBehaviour">&#127908;</button></div>
+      </label>
+      <div class="phrase-bank" data-target="adherenceBehaviour">
+        <button type="button" class="phrase-btn">Claims good adherence.</button>
+        <button type="button" class="phrase-btn">Missed dose due to forgetfulness.</button>
+        <button type="button" class="phrase-btn">Missed insulin due to irregular meal timing.</button>
+        <button type="button" class="phrase-btn">Takes medication at wrong timing.</button>
+        <button type="button" class="phrase-btn">Medication schedule reviewed.</button>
+        <button type="button" class="phrase-btn">Non-adherence due to feeling well when stable.</button>
+        <button type="button" class="phrase-btn">Non-adherence due to side-effect concern.</button>
+        <button type="button" class="phrase-btn">Solution-focused counselling provided; agreed plan documented.</button>
+      </div>
+      <p class="hint">Identify the specific reason for non-adherence for this patient (forgetfulness, side-effect concern, feeling well, cultural/dietary beliefs, cost, lack of support, etc.).</p>
+
+      <!-- MyMAAT module -->
+      <details class="myMaat-module">
+        <summary>MyMAAT Adherence Questionnaire (full assessment &mdash; new DMTAC / annual review / suspected non-adherence)</summary>
+
+        <p class="hint">Use for new DMTAC patients, annual reassessment, suspected non-adherence, post-intervention reassessment, or complex uncontrolled diabetes despite claimed adherence. Score: 5 = Strongly Disagree &hellip; 1 = Strongly Agree. Items scored 1&ndash;3 are listed as problem items. Cutoff: total &ge;50 = good adherence, &lt;50 = moderate-poor adherence (per MOH MyMAAT 2020 form, Bahagian II).</p>
+
+        <div class="voice-score-entry">
+          <label>Voice / typed score entry (e.g. "MyMAAT scores 5 5 4 5 5 5 3 5 5 4 5 5" or "question 1 strongly disagree, question 2 disagree")
+            <div class="field-with-dictate">
+              <input type="text" id="myMaatVoiceInput" placeholder='e.g. "5 5 4 5 5 5 3 5 5 4 5 5"'>
+              <button type="button" class="mic-btn" data-target="myMaatVoiceInput">&#127908;</button>
+            </div>
+          </label>
+          <button type="button" id="parseMyMaatVoice" class="secondary-btn">Parse Score Input</button>
+          <p id="myMaatVoiceWarning" class="warning-text"></p>
+        </div>
+
+        <ol id="myMaatItems" class="myMaat-list"></ol>
+
+        <div class="myMaat-summary-box">
+          <p>Total MyMAAT score: <strong id="myMaatTotal">-- / 60</strong></p>
+          <p>Category: <strong id="myMaatCategory">--</strong></p>
+          <p>Problem items (scored 1&ndash;3): <strong id="myMaatProblemItems">--</strong></p>
+          <label>Generated adherence summary (editable before it enters the note)
+            <div class="field-with-dictate"><textarea id="myMaatSummary" rows="2"></textarea><button type="button" class="mic-btn" data-target="myMaatSummary">&#127908;</button></div>
+          </label>
+        </div>
+      </details>
+    </div>
+
+    <!-- 2. Medication understanding -->
+    <div class="subsection">
+      <h3>2. Medication Understanding</h3>
+      <p class="hint">DFIT: check ability to identify each medication's <strong>D</strong>osage, <strong>F</strong>requency, <strong>I</strong>ndication, and <strong>T</strong>ime (timing) &mdash; by drug name if possible.</p>
+      <div class="field-with-dictate"><textarea id="medUnderstanding" aria-label="Medication understanding" rows="2"></textarea><button type="button" class="mic-btn" data-target="medUnderstanding">&#127908;</button></div>
+      <div class="phrase-bank" data-target="medUnderstanding">
+        <button type="button" class="phrase-btn">DFIT: dosage, frequency, indication and timing all correctly identified.</button>
+        <button type="button" class="phrase-btn">Able to identify medication indication.</button>
+        <button type="button" class="phrase-btn">Unable to state medication dose correctly.</button>
+        <button type="button" class="phrase-btn">Uncertain about frequency/timing.</button>
+        <button type="button" class="phrase-btn">Medication dose and frequency reviewed.</button>
+      </div>
+      <div id="auditAnchorOgld"></div>
+    </div>
+
+    <!-- 3. SMBG review -->
+    <div class="subsection">
+      <h3>3. SMBG Review</h3>
+      <div class="field-with-dictate"><textarea id="smbgReview" aria-label="SMBG review" rows="2"></textarea><button type="button" class="mic-btn" data-target="smbgReview">&#127908;</button></div>
+      <div class="phrase-bank" data-target="smbgReview">
+        <button type="button" class="phrase-btn">SMBG technique reviewed.</button>
+        <button type="button" class="phrase-btn">SMBG record reviewed.</button>
+        <button type="button" class="phrase-btn">Advised to monitor fasting and pre-dinner BG.</button>
+        <button type="button" class="phrase-btn">Advised to bring SMBG record next visit.</button>
+        <button type="button" class="phrase-btn">Paired pre/post-meal SMBG reviewed.</button>
+        <button type="button" class="phrase-btn">SMBG frequency individualised to patient factors.</button>
+      </div>
+      <p class="hint" style="margin:8px 0 2px 0;"><strong>Glucometer / strip problems</strong></p>
+      <div class="phrase-bank" data-target="smbgReview">
+        <button type="button" class="phrase-btn">Faulty glucometer suspected &mdash; readings inconsistent with clinical picture.</button>
+        <button type="button" class="phrase-btn">Glucometer not calibrated / control solution check never performed.</button>
+        <button type="button" class="phrase-btn">Glucometer reading cross-checked against a clinic capillary glucose today.</button>
+        <button type="button" class="phrase-btn">Meter error codes reported by patient.</button>
+        <button type="button" class="phrase-btn">Low battery / meter switching off during testing.</button>
+        <button type="button" class="phrase-btn">Expired test strips in use.</button>
+        <button type="button" class="phrase-btn">Test strips stored improperly (heat, humidity, vial left open).</button>
+        <button type="button" class="phrase-btn">Strip lot code not matched to the meter.</button>
+        <button type="button" class="phrase-btn">Insufficient blood sample / repeated re-application to the strip.</button>
+        <button type="button" class="phrase-btn">Hands not washed and dried before testing (contamination with sugar residue).</button>
+        <button type="button" class="phrase-btn">Advised to bring the glucometer and strips to the next visit for verification.</button>
+        <button type="button" class="phrase-btn">Referred for glucometer replacement/servicing.</button>
+      </div>
+      <p class="hint" style="margin:8px 0 2px 0;"><strong>HbA1c &ndash; SMBG discrepancy (glycation gap)</strong> &mdash; CPG T2DM 6th Ed. 2020, Table 3-21. Where the two disagree, the CPG's preferred approach is a quality-controlled capillary glucose profile rather than assuming the HbA1c is correct.</p>
+      <div class="phrase-bank" data-target="smbgReview">
+        <button type="button" class="phrase-btn">Discrepancy noted: SMBG readings within target but HbA1c above target.</button>
+        <button type="button" class="phrase-btn">Discrepancy noted: HbA1c at target but SMBG readings persistently high.</button>
+        <button type="button" class="phrase-btn">SMBG only recorded at favourable times (e.g. fasting only) &mdash; does not reflect the full 24-hour profile.</button>
+        <button type="button" class="phrase-btn">Post-prandial excursions not captured by the current testing pattern.</button>
+        <button type="button" class="phrase-btn">SMBG record appears incomplete or retrospectively filled in.</button>
+        <button type="button" class="phrase-btn">Meter memory checked against the written diary &mdash; entries do not match.</button>
+        <button type="button" class="phrase-btn">Possible glycation gap &mdash; HbA1c may not reflect true glycaemia (CPG T2DM Table 3-21).</button>
+        <button type="button" class="phrase-btn">Possible cause of falsely HIGH HbA1c: iron/vitamin B12/folate deficiency, hypothyroidism, older age, or recently improved control.</button>
+        <button type="button" class="phrase-btn">Possible cause of falsely LOW HbA1c: haemolysis, recent blood loss/transfusion, liver cirrhosis, renal anaemia on erythropoietin, or treatment with iron/B12/folate.</button>
+        <button type="button" class="phrase-btn">Haemoglobinopathy may affect the HbA1c assay in either direction &mdash; interpret with caution.</button>
+        <button type="button" class="phrase-btn">Advised a quality-controlled capillary glucose profile as the more reliable measure in this situation (CPG T2DM, Section 3).</button>
+        <button type="button" class="phrase-btn">Discrepancy discussed with MO/FMS; repeat HbA1c or alternative glycaemic measure suggested.</button>
+      </div>
+      <p class="hint">A pair of readings (pre- and post-meal) is most meaningful. Promote SMBG especially in insulin patients to guide dose adjustment, and advise patients to bring their SMBG diary/app to each visit.</p>
+          <div id="auditAnchorSmbg"></div>
+    </div>
+
+    <!-- 4. Insulin dose adjustment -->
+    <div class="subsection">
+      <h3>4. Insulin Dose Adjustment</h3>
+      <p class="hint" style="margin:6px 0 2px 0;"><strong>Total Daily Dose (TDD)</strong> &mdash; fill in only if the patient is on insulin. Weight is taken from the Weight/BMI field in Objective if you entered it there.</p>
+      <div class="grid grid-3" style="gap:6px;">
+        <label>Basal insulin (IU/day)
+          <input type="number" step="1" min="0" id="tddBasal" placeholder="e.g. 30">
+        </label>
+        <label>Bolus/prandial total (IU/day)
+          <input type="number" step="1" min="0" id="tddBolus" placeholder="e.g. 18">
+        </label>
+        <label>Premixed total (IU/day)
+          <input type="number" step="1" min="0" id="tddPremix" placeholder="e.g. 0">
+        </label>
+        <label>Body weight (kg)
+          <input type="number" step="0.1" min="0" id="tddWeight" placeholder="auto from Weight/BMI">
+        </label>
+        <label>Bolus doses/day
+          <input type="number" step="1" min="1" max="6" id="tddBolusDoses" placeholder="e.g. 3">
+        </label>
+        <label>Premix doses/day
+          <input type="number" step="1" min="1" max="4" id="tddPremixDoses" placeholder="e.g. 2">
+        </label>
+      </div>
+      <div class="myMaat-summary-box" style="margin-top:8px;">
+        <p id="tddResultHint" class="hint" style="margin:2px 0;"></p>
+        <p id="tddPerKgHint" style="margin:4px 0;"></p>
+        <p id="tddComponentHint" class="hint" style="margin:6px 0; line-height:1.7;"></p>
+        <p id="tddFlagHint" class="hint" style="margin:2px 0;"></p>
+      </div>
+      <button type="button" id="tddResetBtn" class="secondary-btn">Reset TDD</button>
+      <details class="ref-accordion" style="margin-top:8px;">
+        <summary>Insulin dosing reference &mdash; initiation vs optimal</summary>
+        <div style="padding:0 10px 10px 10px;">
+          <table class="ckd-heatmap" style="font-size:12px;">
+            <thead>
+              <tr><th style="text-align:left;">Component</th><th>Initiation</th><th>Optimal dosage</th></tr>
+            </thead>
+            <tbody>
+              <tr><th style="text-align:left;">Basal insulin</th><td>0.2 u/kg/day</td><td>0.5&ndash;0.7 u/kg/day</td></tr>
+              <tr><th style="text-align:left;">Prandial (bolus) insulin</th><td>0.1 u/kg/dose</td><td>0.2&ndash;0.3 u/kg/dose<br><em>ideally not &gt;0.5 u/kg/dose</em></td></tr>
+              <tr><th style="text-align:left;">Premixed insulin</th><td>0.2 u/kg/dose</td><td>0.5 u/kg/dose<br>0.5&ndash;1 u/kg/day in most patients</td></tr>
+            </tbody>
+          </table>
+          <p class="hint" style="margin:8px 0 0 0;"><strong>Is there a maximum dose?</strong> No. Obese or insulin-resistant patients may require <strong>&gt;1 u/kg/day</strong>. <strong>When to be concerned:</strong> around <strong>1.5 u/kg/day &mdash; investigate</strong> for an underlying cause (non-adherence, incorrect dosing, incorrect timing, incorrect injection technique, occult infection). In general <strong>bolus insulin should not exceed 50% of the TDD</strong>, and TDD must still be individualised for BMI, diet, glycaemic target and control, insulin resistance, adherence and hypoglycaemia risk.</p>
+          <p class="hint" style="margin:8px 0 0 0;"><em>Source note:</em> the optimal <strong>basal</strong> figure above (0.5&ndash;0.7 u/kg/day) follows the DMTAC teaching slide used at this facility. The Practical Guide to Insulin Therapy in T2DM, 2nd Ed. 2024 instead bands the optimal basal dose by body habitus &mdash; lean 0.2&ndash;0.3, most patients 0.4&ndash;0.5, obese up to 0.7 u/kg &mdash; so a basal dose of 0.5&ndash;0.7 u/kg/day reads as "optimal" on the slide but as the upper end (obese range) in the Practical Guide. Both are current local teaching; this tool flags a basal dose only above 0.7 u/kg/day, and raises over-basalisation as a *consideration* between 0.5 and 0.7 when HbA1c is still off target. Overall TDD guidance (0.5&ndash;1.0 u/kg/day, &gt;1 u/kg in obesity/insulin resistance, investigate ~1.5 u/kg/day) is consistent across the slide, the Practical Guide and the DMTAC Pocket Guide to Insulin Optimisation, 1st Ed. 2023.</p>
+        </div>
+      </details>
+      <p class="hint">Initial insulin dose is empirical and needs titration to individualised BG/HbA1c targets. Adjust based on SMBG trends (not symptoms alone) &mdash; post-prandial readings are often under-used but important for reaching HbA1c goals. Before initiating/optimising/intensifying, assess adherence, diet/lifestyle, injection technique, hypoglycaemia, glucometer/strip validity, and other causes of dysglycaemia (drug-induced hyperglycaemia, Somogyi effect, dawn phenomenon, infection) &mdash; per DMTAC Pocket Guide to Insulin Optimisation (MOH, 1st Ed. 2023).</p>
+      <details class="myMaat-module">
+        <summary>Insulin titration reference &mdash; basal / premixed / bolus (tap for algorithms)</summary>
+        <div style="padding:0 4px;">
+          <details class="ref-accordion"><summary>Basal insulin</summary>
+            <p class="hint"><strong>Initiate</strong> (FPG &gt;7.0 mmol/L, HbA1c 6.5&ndash;8.0% despite optimised OGLDs): 10 IU or 0.2 IU/kg at bedtime &mdash; 0.1 IU/kg/day if higher hypoglycaemia risk (elderly, lean, milder fasting hyperglycaemia).<br>
+            <strong>Monitor</strong> pre-breakfast (fasting) glucose. <strong>Adjust every 3&ndash;7 days</strong> once 3 consecutive readings are available:<br>
+            &bull; &gt;1 of 3 <strong>&lt;4.0</strong> mmol/L &rarr; reduce 2 IU &bull; all 3 <strong>4.0&ndash;7.0</strong> &rarr; maintain &bull; &gt;1 of 3 <strong>&gt;7.0</strong> without hypoglycaemia &rarr; increase 2 IU.<br>
+            <strong>Intensify</strong> (add prandial at the largest meal, 6 IU or 0.1 IU/kg) when HbA1c stays 6.5&ndash;8.0% despite FPG at goal, or once basal exceeds 0.5 IU/kg &mdash; watch for over-basalisation: basal &gt;0.5 IU/kg/day, post-meal glucose &gt;10 mmol/L, HbA1c off target despite FPG at target, or bedtime-to-morning difference &ge;2.8 mmol/L.</p>
+          </details>
+          <details class="ref-accordion"><summary>Premixed insulin</summary>
+            <p class="hint"><strong>Initiate</strong> &mdash; Once daily: 10 IU or 0.2 IU/kg, pre-dinner for human premixed, or at the biggest meal (usually evening) for analogue premixed. Twice daily: 10 IU or 0.2 IU/kg at pre-breakfast and pre-dinner; use 0.1 IU/kg if higher hypoglycaemia risk.<br>
+            <strong>Monitor</strong> &mdash; OD: pre-breakfast glucose. BD: pre-breakfast and pre-dinner. Target pre-meal <strong>4.4&ndash;7.0</strong> mmol/L in most patients.<br>
+            <strong>Which reading drives which dose:</strong> pre-breakfast glucose &rarr; adjust the <em>pre-dinner</em> dose; pre-dinner glucose &rarr; adjust the <em>pre-breakfast</em> dose.<br>
+            <strong>Adjust after 3 consecutive values (every 3&ndash;7 days):</strong> &gt;1 value <strong>&lt;4.4</strong> &rarr; reduce 2 IU or 10&ndash;15% &bull; all <strong>4.4&ndash;7.0</strong> &rarr; maintain &bull; &gt;1 value <strong>&gt;7.0</strong> without hypoglycaemia &rarr; increase 2 IU or 10&ndash;15%.<br>
+            <strong>Caution</strong> &mdash; watch for between-meal hypoglycaemia; if hypoglycaemia limits optimisation, consider switching human premixed to a premixed analogue. Continue metformin if not contraindicated; stop sulphonylurea once on twice-daily premixed.</p>
+          </details>
+          <details class="ref-accordion"><summary>Bolus (prandial) insulin</summary>
+            <p class="hint"><strong>Stepwise addition</strong> &mdash; basal &rarr; add 1 bolus before the largest meal &rarr; if HbA1c still above target, add a 2nd bolus before the 2nd largest meal &rarr; then a 3rd (basal-bolus, one bolus per main meal).<br>
+            <strong>Initiate</strong> each bolus dose at <strong>6 IU or 0.1 IU/kg per dose</strong>.<br>
+            <strong>Optimise</strong> &mdash; increase <strong>1&ndash;2 IU or 10&ndash;15%</strong> every 3 days or twice weekly until individualised SMBG targets are met. If hypoglycaemia occurs, identify the cause; if none is found, reduce the bolus by <strong>2&ndash;4 IU or 10&ndash;20%</strong>. Reassess treatment response every 3&ndash;6 months and intensify further if control is not achieved.<br>
+            <strong>Caution</strong> &mdash; discontinue sulphonylurea when bolus insulin is started; continue metformin.</p>
+          </details>
+          <details class="ref-accordion"><summary>Source note &mdash; threshold discrepancy</summary>
+            <p class="hint">The basal <strong>&lt;4.0 / 4.0&ndash;7.0 / &gt;7.0</strong> mmol/L thresholds and flat &plusmn;2 IU steps come from the MOH <em>DMTAC Pocket Guide to Insulin Optimisation</em> (1st Ed., Oct 2023) algorithm diagrams. The <em>Practical Guide to Insulin Therapy in T2DM</em> (2nd Ed., 2024) sets the band 0.4 mmol/L higher (<strong>&lt;4.4 / 4.4&ndash;7.0 / &gt;7.0</strong>) and allows a percentage step (&plusmn;10&ndash;15%) as an alternative to &plusmn;2 IU &mdash; which is why the premixed and bolus algorithms above quote 4.4 while basal quotes 4.0. Both are legitimate Malaysian sources (the pocket guide itself cites the Practical Guide). Use local practice and document which you followed.</p>
+          </details>
+        </div>
+      </details>
+      <div class="field-with-dictate"><textarea id="insulinDoseAdjustment" aria-label="Insulin dose adjustment" rows="2"></textarea><button type="button" class="mic-btn" data-target="insulinDoseAdjustment">&#127908;</button></div>
+      <div class="phrase-bank" data-target="insulinDoseAdjustment">
+        <button type="button" class="phrase-btn">Basal insulin dose increased by 2 IU based on &gt;1 of 3 consecutive pre-breakfast FPG readings &gt;7.0 mmol/L, no hypoglycaemia.</button>
+          <button type="button" class="phrase-btn">No insulin dose change this visit, continue current dose.</button>
+          <button type="button" class="phrase-btn">Basal insulin dose maintained; all 3 consecutive FPG readings within target range.</button>
+          <button type="button" class="phrase-btn">Basal insulin dose reduced by 2 IU due to &gt;1 of 3 consecutive FPG readings &lt;4.0 mmol/L.</button>
+          <button type="button" class="phrase-btn">Insulin dose titrated based on SMBG trend.</button>
+          <button type="button" class="phrase-btn">Post-prandial glucose reviewed for dose adjustment.</button>
+          <button type="button" class="phrase-btn">Over-basalisation suspected (basal dose &gt;0.5 IU/kg/day, HbA1c off target despite FPG at goal) &mdash; discussed with MO/FMS re: intensification to basal-plus/basal-bolus.</button>
+          <button type="button" class="phrase-btn">Therapeutic inertia identified; escalation deferred despite HbA1c above individualised target &mdash; highlighted to MO/FMS.</button>
+          <button type="button" class="phrase-btn">Patient empowered and educated on self-titration of insulin dose at home.</button>
+      </div>
+      <p class="hint" style="margin:8px 0 2px 0;"><strong>Premixed insulin</strong></p>
+      <div class="phrase-bank" data-target="insulinDoseAdjustment">
+        <button type="button" class="phrase-btn">Pre-dinner premixed dose increased by 2 IU based on &gt;1 of 3 pre-breakfast readings &gt;7.0 mmol/L, no hypoglycaemia.</button>
+        <button type="button" class="phrase-btn">Pre-breakfast premixed dose increased by 2 IU based on &gt;1 of 3 pre-dinner readings &gt;7.0 mmol/L, no hypoglycaemia.</button>
+        <button type="button" class="phrase-btn">Premixed dose maintained; all 3 pre-meal readings within 4.4&ndash;7.0 mmol/L.</button>
+        <button type="button" class="phrase-btn">Pre-dinner premixed dose reduced by 2 IU due to &gt;1 of 3 pre-breakfast readings &lt;4.4 mmol/L.</button>
+        <button type="button" class="phrase-btn">Pre-breakfast premixed dose reduced by 2 IU due to &gt;1 of 3 pre-dinner readings &lt;4.4 mmol/L.</button>
+        <button type="button" class="phrase-btn">Between-meal hypoglycaemia noted; switch from human premixed to premixed analogue suggested.</button>
+        <button type="button" class="phrase-btn">Premixed OD intensified to BD as HbA1c remains above individualised target.</button>
+      </div>
+      <p class="hint" style="margin:8px 0 2px 0;"><strong>Bolus (prandial) insulin</strong></p>
+      <div class="phrase-bank" data-target="insulinDoseAdjustment">
+        <button type="button" class="phrase-btn">Bolus insulin initiated at 6 IU (0.1 IU/kg) before the largest meal.</button>
+        <button type="button" class="phrase-btn">Bolus dose increased by 2 IU based on post-prandial readings above individualised target.</button>
+        <button type="button" class="phrase-btn">Bolus dose maintained; post-prandial readings within individualised target.</button>
+        <button type="button" class="phrase-btn">Bolus dose reduced by 2&ndash;4 IU following hypoglycaemia with no identifiable cause.</button>
+        <button type="button" class="phrase-btn">Second pre-meal bolus added before the next largest meal as HbA1c remains above target.</button>
+        <button type="button" class="phrase-btn">Progressed to basal-bolus (one bolus per main meal).</button>
+        <button type="button" class="phrase-btn">Sulphonylurea discontinued on starting bolus insulin; metformin continued.</button>
+      </div>
+      <p class="hint" style="margin:8px 0 2px 0;"><strong>Before titrating &mdash; other causes of hyperglycaemia excluded</strong> (DMTAC Pocket Guide to Insulin Optimisation, 1st Ed. 2023, Section 3: assess adherence, diet/lifestyle, injection technique, hypoglycaemia, faulty glucometer/expired strips, and the factors below <em>before</em> initiating, optimising or intensifying insulin)</p>
+      <div class="phrase-bank" data-target="insulinDoseAdjustment">
+        <button type="button" class="phrase-btn">Other causes of hyperglycaemia excluded before dose escalation.</button>
+        <button type="button" class="phrase-btn">Drug-induced hyperglycaemia suspected &mdash; corticosteroid therapy.</button>
+        <button type="button" class="phrase-btn">Drug-induced hyperglycaemia suspected &mdash; traditional/complementary product (may contain undeclared steroid).</button>
+        <button type="button" class="phrase-btn">Drug-induced hyperglycaemia suspected &mdash; other agent (e.g. antipsychotic, thiazide).</button>
+        <button type="button" class="phrase-btn">Dawn phenomenon suspected &mdash; fasting hyperglycaemia without nocturnal hypoglycaemia.</button>
+        <button type="button" class="phrase-btn">Somogyi phenomenon suspected &mdash; rebound fasting hyperglycaemia following nocturnal hypoglycaemia.</button>
+        <button type="button" class="phrase-btn">Advised overnight/3am SMBG to distinguish Somogyi from Dawn phenomenon before adjusting basal dose.</button>
+        <button type="button" class="phrase-btn">Intercurrent infection contributing to hyperglycaemia.</button>
+        <button type="button" class="phrase-btn">Basal dose NOT escalated pending resolution of the above.</button>
+      </div>
+          <div id="auditAnchorInsulinDose"></div>
+    </div>
+
+    <!-- 5. Hypoglycaemia assessment -->
+    <div class="subsection">
+      <h3>5. Hypoglycaemia Assessment</h3>
+      <label>Hypoglycaemia severity this visit/interval (Practical Guide to Insulin Therapy, 2nd Ed. 2024, Table 9-2)
+        <select id="hypoSeverity">
+          <option value="">-- not assessed / none reported --</option>
+          <option value="No hypoglycaemic episode reported since last visit.">None reported since last visit</option>
+          <option value="Level 1 hypoglycaemia (autonomic symptoms, plasma glucose <3.9 to >=3.0 mmol/L, self-treated).">Level 1 (glucose &lt;3.9 to &ge;3.0 mmol/L, autonomic symptoms, self-treated)</option>
+          <option value="Level 2 hypoglycaemia (autonomic and neuroglycopenic symptoms, plasma glucose <3.0 mmol/L, self-treated).">Level 2 (glucose &lt;3.0 mmol/L, neuroglycopenic symptoms, self-treated)</option>
+          <option value="Level 3 hypoglycaemia (severe event, altered mental/physical status, required assistance from another person).">Level 3 (severe, altered mental/physical status, required assistance)</option>
+        </select>
+      </label>
+      <div class="field-with-dictate"><textarea id="hypoAssessment" aria-label="Hypoglycaemia assessment" rows="2"></textarea><button type="button" class="mic-btn" data-target="hypoAssessment">&#127908;</button></div>
+      <div class="phrase-bank" data-target="hypoAssessment">
+        <button type="button" class="phrase-btn">No hypoglycaemic symptoms reported.</button>
+        <button type="button" class="phrase-btn">Hypoglycaemia symptoms (autonomic/neuroglycopenic) explained.</button>
+        <button type="button" class="phrase-btn">Treatment of hypoglycaemia reinforced (15g simple CHO, recheck at 15 minutes, repeat if still &lt;3.9 mmol/L).</button>
+        <button type="button" class="phrase-btn">Advised to carry fast-acting (simple) carbohydrate at all times.</button>
+        <button type="button" class="phrase-btn">SMBG readings around the hypoglycaemic episode reviewed.</button>
+        <button type="button" class="phrase-btn">Causative risk factor for hypoglycaemia identified (insulin secretagogue use, missed/irregular meal, alcohol without adequate CHO, excessive physical activity, renal/hepatic impairment).</button>
+        <button type="button" class="phrase-btn">Hypoglycaemia unawareness screened for.</button>
+        <button type="button" class="phrase-btn">Family/caregiver educated on recognising and managing hypoglycaemia.</button>
+        <button type="button" class="phrase-btn">Nocturnal hypoglycaemia suspected &mdash; overnight/3am SMBG advised.</button>
+        <button type="button" class="phrase-btn">Somogyi phenomenon suspected &mdash; nocturnal hypoglycaemia with rebound fasting hyperglycaemia; basal dose not increased.</button>
+      </div>
+      <p class="hint">Treatment: for Level 1/2 hypoglycaemia, give 15g simple/rapid-acting carbohydrate (e.g. 1 tbsp honey, 120ml fruit juice/regular soft drink, 3 tsp sugar in water); recheck plasma glucose after 15 minutes; repeat 15g CHO if still &lt;3.9 mmol/L until resolved, then follow with the next planned meal/snack (Practical Guide to Insulin Therapy, 2nd Ed. 2024, Figure 9-1). Level 3 (severe) episodes require assistance from another person and, where the patient is unconscious, urgent parenteral treatment (IV dextrose or IM/SC glucagon) &mdash; refer/escalate accordingly.</p>
+          <div id="auditAnchorHypo"></div>
+    </div>
+
+    <!-- 6. Insulin injection technique -->
+    <div class="subsection">
+      <h3>6. Insulin Injection Technique</h3>
+      <p class="hint">Assess needle change frequency, needle type, SC vs IM technique, site rotation, bleeding, leakage, pain, and whether the patient waits &ge;10 seconds before withdrawing the needle.</p>
+      <div class="field-with-dictate"><textarea id="insulinTechnique" aria-label="Insulin injection technique" rows="2"></textarea><button type="button" class="mic-btn" data-target="insulinTechnique">&#127908;</button></div>
+
+      <p class="hint" style="margin-bottom:2px;"><strong>Issues identified</strong></p>
+      <div class="phrase-bank" data-target="insulinTechnique">
+        <button type="button" class="phrase-btn">Does not resuspend cloudy insulin (roll/invert pen 10x) before injecting.</button>
+        <button type="button" class="phrase-btn">Skips air-shot/priming step before injecting.</button>
+        <button type="button" class="phrase-btn">Does not hold &ge;10 seconds after plunger stops before withdrawing needle.</button>
+        <button type="button" class="phrase-btn">Removes needle too quickly without checking for a "0" in the dose window.</button>
+        <button type="button" class="phrase-btn">Needle reuse (&gt;2 times).</button>
+        <button type="button" class="phrase-btn">Does not check cartridge's expiry date before use.</button>
+        <button type="button" class="phrase-btn">Not rotating injection sites.</button>
+        <button type="button" class="phrase-btn">Injecting into hypertrophic lump.</button>
+        <button type="button" class="phrase-btn">Using mismatched needle &mdash; longer than needed (e.g. 6mm).</button>
+        <button type="button" class="phrase-btn">Incorrect injection timing relative to meals.</button>
+        <button type="button" class="phrase-btn">Taking wrong dose/type of insulin.</button>
+        <button type="button" class="phrase-btn">Skipping or missing insulin doses.</button>
+        <button type="button" class="phrase-btn">Improper storage of insulin.</button>
+        <button type="button" class="phrase-btn">Using expired or damaged insulin.</button>
+        <button type="button" class="phrase-btn">Injecting at the wrong angle.</button>
+        <button type="button" class="phrase-btn">Not inserting the needle fully.</button>
+        <button type="button" class="phrase-btn">Not warming insulin before use.</button>
+        <button type="button" class="phrase-btn">Insulin leakage at injection site noted.</button>
+      </div>
+
+      <p class="hint" style="margin:8px 0 2px 0;"><strong>Technique reviewed / advice given</strong></p>
+      <div class="phrase-bank" data-target="insulinTechnique">
+        <button type="button" class="phrase-btn">Injection technique reviewed.</button>
+        <button type="button" class="phrase-btn">Needle change frequency counselled (single use, no reuse).</button>
+        <button type="button" class="phrase-btn">Advised to wait &ge;10 seconds before withdrawing the needle.</button>
+        <button type="button" class="phrase-btn">Advised against needle reuse.</button>
+        <button type="button" class="phrase-btn">Subcutaneous technique confirmed (not intramuscular).</button>
+        <button type="button" class="phrase-btn">Insulin storage reviewed (in-use pen at room temperature away from sunlight, unopened supply refrigerated 2&ndash;8&deg;C).</button>
+      </div>
+
+      <p class="hint" style="margin:8px 0 2px 0;"><strong>Education given</strong></p>
+      <div class="phrase-bank" data-target="insulinTechnique">
+        <button type="button" class="phrase-btn">Correct technique is quadrant-based: divide the site into quadrants, use one quadrant per week, rotate quadrant-to-quadrant in a consistent direction, and space individual injections &ge;1 cm apart within a quadrant.</button>
+      </div>
+      <div id="auditAnchorInsulin"></div>
+    </div>
+
+    <!-- 7. Lipohypertrophy assessment -->
+    <div class="subsection">
+      <h3>7. Lipohypertrophy Assessment</h3>
+      <p class="hint">Detect by palpation/pinch test (healthy skin pinches tightly; lipohypertrophic tissue does not). Do not inject into affected areas; monitor SMBG closely and adjust dose if the injection site is changed (absorption from a non-hypertrophic site is typically faster).</p>
+      <div class="field-with-dictate"><textarea id="lipohypertrophyAssessment" aria-label="Lipohypertrophy assessment" rows="2"></textarea><button type="button" class="mic-btn" data-target="lipohypertrophyAssessment">&#127908;</button></div>
+      <div class="phrase-bank" data-target="lipohypertrophyAssessment">
+        <button type="button" class="phrase-btn">No lipohypertrophy detected on palpation/pinch test.</button>
+        <button type="button" class="phrase-btn">Lipohypertrophy ("soft lump") noted at injection site.</button>
+        <button type="button" class="phrase-btn">Advised not to inject into the lipohypertrophic area.</button>
+        <button type="button" class="phrase-btn">Advised to self-examine for lipohypertrophy regularly and rotate injection sites systematically.</button>
+        <button type="button" class="phrase-btn">SMBG monitored closely after site change due to risk of altered insulin absorption.</button>
+      </div>
+    </div>
+
+    <!-- 8. Lifestyle / diet -->
+    <div class="subsection">
+      <h3>8. Lifestyle / Diet</h3>
+      <div class="field-with-dictate"><textarea id="lifestyleDiet" aria-label="Lifestyle and diet" rows="2"></textarea><button type="button" class="mic-btn" data-target="lifestyleDiet">&#127908;</button></div>
+      <div class="phrase-bank" data-target="lifestyleDiet">
+        <button type="button" class="phrase-btn">Counselled on carbohydrate portion control.</button>
+        <button type="button" class="phrase-btn">Counselled on regular meal timing.</button>
+        <button type="button" class="phrase-btn">Advised to reduce sweet drinks.</button>
+        <button type="button" class="phrase-btn">Encouraged physical activity as tolerated.</button>
+      </div>
+          <div id="auditAnchorLifestyle"></div>
+    </div>
+
+    <!-- 9. Carbohydrate counting -->
+    <div class="subsection">
+      <h3>9. Carbohydrate Counting</h3>
+      <p class="hint">Document meal portions (breakfast/lunch/dinner/snacks) using CHO exchange (1 exchange &asymp; 15g carbohydrate). Useful when titrating insulin doses.</p>
+      <div class="field-with-dictate"><textarea id="choCounting" aria-label="Carbohydrate counting" rows="2" placeholder="e.g. Breakfast ~4 exchange, lunch ~4 exchange, dinner ~5 exchange, snacks ~2 exchange"></textarea><button type="button" class="mic-btn" data-target="choCounting">&#127908;</button></div>
+      <div class="phrase-bank" data-target="choCounting">
+        <button type="button" class="phrase-btn">Meal portions quantified using CHO exchange.</button>
+        <button type="button" class="phrase-btn">CHO counting explained to patient.</button>
+        <button type="button" class="phrase-btn">Insulin dose reviewed against CHO intake.</button>
+      </div>
+
+      <details class="myMaat-module">
+        <summary>CHO Exchange Calculator (auto-count from foods or from your typed dietary review)</summary>
+        <p class="hint">Portions per 1 CHO exchange (&asymp;15g carbohydrate) are sourced primarily from the Malaysian Dietitians' Association's "Medical Nutrition Therapy Guidelines for Type 2 Diabetes, 2nd Edition" (MDA MNT 2nd Ed.), with the MOH MyHEALTH patient education portal and the HTAR (Hospital Tengku Ampuan Rahimah) dietetics "Pertukaran Karbohidrat" exchange list used where marked; items marked "estimate" follow the standard exchange system but weren't independently verified against a specific Malaysian table &mdash; treat this whole calculator as a clerking convenience, not a dietitian-verified calculation. Cross-check with your facility's own Senarai Pertukaran Makanan / refer to a dietitian for formal MNT. For foods with a known gram weight (e.g. from a food label or a weighed portion), choose "Weight in grams" as the unit &mdash; this converts directly to a CHO exchange using MDA MNT 2nd Ed. Appendix 4's measured gram/CHO data where available.</p>
+
+        <div class="grid grid-2">
+          <label>Meal
+            <select id="choMealSelect">
+              <option value="Breakfast">Breakfast</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Dinner">Dinner</option>
+              <option value="Snack">Snack</option>
+            </select>
+          </label>
+          <label>Food
+            <select id="choFoodSelect"></select>
+          </label>
+        </div>
+        <div class="grid grid-2">
+          <label>Quantity
+            <input type="number" id="choQtyInput" min="0.25" step="0.25" value="1">
+          </label>
+          <label>Unit
+            <select id="choUnitSelect">
+              <option value="portion">&times; the listed portion</option>
+              <option value="g">Weight in grams (g)</option>
+            </select>
+          </label>
+        </div>
+        <p id="choFoodPortionHint" class="hint"></p>
+        <button type="button" id="choAddBtn" class="secondary-btn" style="width:100%;">Add to list</button>
+
+        <details class="ref-accordion" style="margin-top:10px;">
+          <summary>Food not on the list? Add from a nutrition label / MyFCD, or from calories</summary>
+          <div style="padding:0 10px 10px 10px;">
+            <p class="hint" style="margin-top:6px;"><strong>A. From a nutrition label or MyFCD (exact)</strong> &mdash; the Malaysian Food Composition Database at <em>myfcd.moh.gov.my</em> gives carbohydrate in g per 100 g for about 1,100 Malaysian foods; packaged products show the same on the label. Enter that figure and the portion weight and this converts exactly, no estimating involved.</p>
+            <div class="grid grid-3">
+              <label>Food name
+                <input type="text" id="choLabelName" placeholder="e.g. Roti canai">
+              </label>
+              <label>CHO per 100 g
+                <input type="number" step="0.1" min="0" id="choLabelPer100" placeholder="e.g. 47.8">
+              </label>
+              <label>Portion eaten (g)
+                <input type="number" step="1" min="0" id="choLabelGrams" placeholder="e.g. 80">
+              </label>
+            </div>
+            <p id="choLabelHint" class="hint"></p>
+            <button type="button" id="choLabelAddBtn" class="secondary-btn" style="width:100%;">Add from label</button>
+
+            <p class="hint" style="margin-top:14px;"><strong>B. From calories only (estimate)</strong> &mdash; calories alone cannot tell you the carbohydrate content, so this applies the typical carbohydrate share of energy for the food type you pick. Use it only when no label or MyFCD figure is available, and treat the answer as approximate.</p>
+            <div class="grid grid-3">
+              <label>Food name
+                <input type="text" id="choKcalName" placeholder="e.g. Nasi lemak (mixed)">
+              </label>
+              <label>Energy (kcal)
+                <input type="number" step="1" min="0" id="choKcalValue" placeholder="e.g. 400">
+              </label>
+              <label>Food type
+                <select id="choKcalCategory">
+                  <option value="">-- Select --</option>
+                  <option value="rice">Rice / noodle / starchy dish</option>
+                  <option value="bread">Bread, biscuit, cereal, kuih</option>
+                  <option value="mixed">Mixed meal (rice + protein + vegetable)</option>
+                  <option value="fried">Fried / high-fat dish or snack</option>
+                  <option value="drink">Sweetened drink / dessert</option>
+                  <option value="protein">Mainly protein (meat, fish, egg, tofu)</option>
+                  <option value="fruit">Fruit</option>
+                </select>
+              </label>
+            </div>
+            <p id="choKcalHint" class="hint"></p>
+            <button type="button" id="choKcalAddBtn" class="secondary-btn" style="width:100%;">Add from calories (estimate)</button>
+          </div>
+        </details>
+
+        <label style="margin-top:10px;">Patient group (sets the recommended CHO exchange range)
+          <select id="choPatientGroup">
+            <option value="">-- Select for target checking --</option>
+            <option value="inactiveWoman">Inactive woman</option>
+            <option value="activeWomanOrInactiveMan">Active woman, or inactive man</option>
+            <option value="activeMan">Active man</option>
+          </select>
+        </label>
+        <p id="choTargetHint" class="hint"></p>
+
+        <ul id="choEntryList" class="myMaat-list" style="margin-top:8px;"></ul>
+        <div class="myMaat-summary-box">
+          <p>Estimated total: <strong id="choGrandTotal">0 exchange(s)</strong> <span id="choGrandTotalGrams" class="hint"></span></p>
+          <p id="choPerMealCheck" class="hint" style="margin:6px 0 0 0;"></p>
+        </div>
+        <div class="button-row">
+          <button type="button" id="choInsertBtn" class="secondary-btn">Insert breakdown into CHO Counting field</button>
+          <button type="button" id="choClearBtn" class="secondary-btn">Clear calculator list</button>
+        </div>
+
+        <hr style="margin:16px 0; border:none; border-top:1px solid var(--border);">
+
+        <p class="hint"><strong>Or: scan your typed dietary review for food mentions.</strong> Type your dietary review as free text in the CHO Counting box above (e.g. "nasi 1 mangkuk, roti canai 2 keping, pisang 1 biji"), then click below. This is a best-effort keyword scan &mdash; always check the result before relying on it.</p>
+        <button type="button" id="choScanBtn" class="secondary-btn">Scan CHO Counting text for food keywords</button>
+        <p id="choScanResult" class="hint"></p>
+      </details>
+    </div>
+
+    <!-- Fasting Eligibility Assessment tool (not part of the numbered 1-10 sequence) -->
+    <div class="subsection">
+      <h3>Fasting Eligibility Assessment <span class="hint" style="font-weight:400;">(optional tool &mdash; use when patient plans to fast, e.g. Ramadan or other voluntary/religious fasting)</span></h3>
+      <details class="myMaat-module">
+        <summary>IDF-DAR Risk Calculator (2026 Update) &mdash; tap to assess fasting risk</summary>
+        <p class="hint">Source: Afandi B, Suliman M, Shaikh S, Beshyah SA, Hasannien M. "The 2026 Update of the IDF-DAR Risk Calculator for Fasting in People with Diabetes." <em>J Diabetes Endocrine Practice</em> 2025 (International Diabetes Federation &ndash; Diabetes and Ramadan, IDF-DAR). Select the option that applies for each risk element; for "Type of diabetes treatment," tick all that are relevant. The total score is the sum of all points selected/ticked.</p>
+
+        <div class="grid grid-2">
+          <label>1. Pregnancy with any type of diabetes
+            <select id="fastingPregnancy">
+              <option value="0">No</option>
+              <option value="6.5">Yes</option>
+            </select>
+          </label>
+          <label>2. Diabetes type
+            <select id="fastingDmType">
+              <option value="0">Type 2 diabetes or any other type</option>
+              <option value="1">Type 1 diabetes or LADA</option>
+            </select>
+          </label>
+          <label>3. Duration of diabetes
+            <select id="fastingDuration">
+              <option value="0">&lt; 10 years</option>
+              <option value="0.5">10&ndash;20 years</option>
+              <option value="1">&gt; 20 years</option>
+            </select>
+          </label>
+          <label>6. Level of HbA1c
+            <select id="fastingA1c">
+              <option value="0">&lt; 7.5% (&lt;58 mmol/mol)</option>
+              <option value="0.5">7.5&ndash;9% (58&ndash;75 mmol/mol)</option>
+              <option value="1">&gt; 9% (&gt;75 mmol/mol)</option>
+            </select>
+          </label>
+          <label>7. Glucose monitoring
+            <select id="fastingGlucoseMonitoring">
+              <option value="0">Done as indicated</option>
+              <option value="1">Suboptimally done</option>
+              <option value="2">Not done</option>
+              <option value="-0.5">Any type of CGM</option>
+            </select>
+          </label>
+          <label>8. Hyperglycaemic emergencies
+            <select id="fastingHyperglycemicEmergency">
+              <option value="0">No DKA/HHS in the last 6 months</option>
+              <option value="1">DKA/HHS in last 4&ndash;6 months</option>
+              <option value="2">DKA/HHS in last 2&ndash;3 months</option>
+              <option value="3.5">DKA/HHS in the last month</option>
+            </select>
+          </label>
+          <label>9. Macrovascular complications
+            <select id="fastingMacrovascular">
+              <option value="0">No macrovascular disease</option>
+              <option value="2">Stable macrovascular disease</option>
+              <option value="6.5">Unstable macrovascular disease</option>
+            </select>
+          </label>
+          <label>10a. Nephropathy (by eGFR)
+            <select id="fastingNephropathy">
+              <option value="0">eGFR &gt; 60 mL/min</option>
+              <option value="2">eGFR 45&ndash;60 mL/min</option>
+              <option value="4">eGFR 30&ndash;45 mL/min</option>
+              <option value="6.5">eGFR &lt; 30 mL/min</option>
+            </select>
+          </label>
+          <label>10b. Neuropathy / foot complications / retinopathy
+            <select id="fastingMicrovascular">
+              <option value="0">0 microvascular complications</option>
+              <option value="1">1 microvascular complication</option>
+              <option value="2">2 microvascular complications</option>
+              <option value="3">3 microvascular complications</option>
+            </select>
+          </label>
+          <label>11. Cognitive function, frailty &amp; age
+            <select id="fastingFrailty">
+              <option value="0">Normal cognitive function and no frailty</option>
+              <option value="1">Age &gt; 70 years with no home support</option>
+              <option value="4">Mild to moderate frailty</option>
+              <option value="6.5">Advanced frailty</option>
+              <option value="6.5">Impaired cognitive function</option>
+            </select>
+          </label>
+          <label>12. Physical labour
+            <select id="fastingLabor">
+              <option value="0">Low intensity</option>
+              <option value="2">Moderate intensity</option>
+              <option value="4">High intensity</option>
+            </select>
+          </label>
+          <label>13. Fasting-focused education given
+            <select id="fastingEducation">
+              <option value="0">Yes</option>
+              <option value="1">No</option>
+            </select>
+          </label>
+          <label>14. Fasting hours
+            <select id="fastingHours">
+              <option value="0">&lt; 16 hours</option>
+              <option value="1">&ge; 16 hours</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="full">5. Presence of hypoglycaemia (select the highest that applies)
+          <select id="fastingHypoglycemia">
+            <option value="0">No hypoglycaemia in last 4 weeks</option>
+            <option value="0.5">Hypoglycaemia &lt;1 time per week</option>
+            <option value="1">1&ndash;2 episodes of hypoglycaemia/week</option>
+            <option value="2">3&ndash;5 episodes of hypoglycaemia/week</option>
+            <option value="3">6&ndash;7 episodes of hypoglycaemia/week</option>
+            <option value="4">Hypoglycaemia more than once daily</option>
+            <option value="5">Severe hypoglycaemia during last 4 weeks</option>
+            <option value="6.5">Impaired hypoglycaemia awareness</option>
+          </select>
+        </label>
+
+        <p class="hint" style="margin-top:10px;"><strong>4. Type of diabetes treatment</strong> (tick all that are relevant):</p>
+        <div id="fastingTreatmentGroup">
+          <label class="audit-item"><input type="checkbox" data-score="2"> Multiple daily premixed insulin injections (2)</label>
+          <label class="audit-item"><input type="checkbox" data-score="1.5"> Once daily premixed insulin (1.5)</label>
+          <label class="audit-item"><input type="checkbox" data-score="1.5"> Open loop insulin pump (1.5)</label>
+          <label class="audit-item"><input type="checkbox" data-score="1"> Automated insulin delivery system (1)</label>
+          <label class="audit-item"><input type="checkbox" data-score="1"> Standard basal insulin (NPH, Detemir or Glargine 100) (1)</label>
+          <label class="audit-item"><input type="checkbox" data-score="0.75"> Ultra long-acting basal insulin (Glargine 300 or Degludec) (0.75)</label>
+          <label class="audit-item"><input type="checkbox" data-score="0.75"> Short acting insulin (0.75)</label>
+          <label class="audit-item"><input type="checkbox" data-score="0.75"> Glibenclamide or Glipizide (0.75)</label>
+          <label class="audit-item"><input type="checkbox" data-score="0.5"> Modern sulfonylurea (Gliclazide, Gliclazide MR, Glimepiride) or Repaglinide (0.5)</label>
+          <label class="audit-item"><input type="checkbox" data-score="0.25"> &ge;2 glucose-lowering medications excluding insulin or sulfonylurea (0.25)</label>
+          <label class="audit-item"><input type="checkbox" data-score="0"> Nutrition modification only or monotherapy, excluding insulin/sulfonylurea (0)</label>
+        </div>
+
+        <div class="myMaat-summary-box" style="margin-top:12px;">
+          <p>Total risk score: <strong id="fastingTotalScore">--</strong></p>
+          <p>Risk category: <strong id="fastingRiskCategory">--</strong></p>
+          <p id="fastingRecommendation" class="hint"></p>
+        </div>
+
+        <label>Fasting eligibility assessment summary (auto-filled &mdash; edit as needed)
+          <div class="field-with-dictate"><textarea id="fastingAssessmentSummary" rows="2"></textarea><button type="button" class="mic-btn" data-target="fastingAssessmentSummary">&#127908;</button></div>
+        </label>
+        <button type="button" id="fastingResetBtn" class="secondary-btn">Reset fasting assessment</button>
+
+        <p class="hint" style="margin-top:8px;"><strong>Risk categories:</strong> Low risk, score 0&ndash;3 (fasting generally safe with medical evaluation, possible medication adjustment, and close monitoring). Moderate risk, score 3.5&ndash;6 (safety uncertain &mdash; strict monitoring and careful medication adjustment required if patient proceeds to fast). High risk, score &gt;6 (fasting considered unsafe &mdash; advise against fasting due to risk of serious complications). These are medical risk bands only; final fasting decisions remain a shared decision between patient, treating clinician, and, where relevant, religious guidance &mdash; a high medical risk score does not itself constitute a religious ruling.</p>
+      </details>
+    </div>
+
+    <!-- 10. DMTAC patient education -->
+    <div class="subsection">
+      <h3>10. DMTAC Patient Education</h3>
+      <p class="hint">Teach one topic per visit using the DMTAC flipchart, keep language simple, and reassess understanding at the next visit. For visits 1&ndash;4, the matching flipchart name is inserted automatically into the <strong>PHIS note only</strong> (audit requirement) &mdash; it is never added to the CCMS note. Per the MDES Diabetes Education Manual, use empowering, non-judgemental, stigma-free, and inclusive language, and consider the patient's health literacy/numeracy when pacing education.</p>
+      <div class="field-with-dictate"><textarea id="dmtacEducation" aria-label="DMTAC patient education" rows="2" placeholder="Topic taught and method"></textarea><button type="button" class="mic-btn" data-target="dmtacEducation">&#127908;</button></div>
+      <div class="phrase-bank" data-target="dmtacEducation">
+        <button type="button" class="phrase-btn">Educated using DMTAC flipchart.</button>
+        <button type="button" class="phrase-btn">Educated on medication regimen change.</button>
+        <button type="button" class="phrase-btn">Knowledge reassessed from previous visit.</button>
+        <button type="button" class="phrase-btn">Plan to educate on this topic further next visit.</button>
+        <button type="button" class="phrase-btn">Health literacy/numeracy assessed before education.</button>
+        <button type="button" class="phrase-btn">Empowering, non-judgemental language used to explore patient's beliefs and barriers to self-care.</button>
+        <button type="button" class="phrase-btn">Shared decision-making used to set individualised goals of care.</button>
+      </div>
+      <div id="auditAnchorEducation"></div>
+    </div>
+
+  </section>
+
+  <!-- ============ ASSESSMENT / PLAN ============ -->
+  <section class="card">
+    <h2>Assessment, Intervention &amp; Plan</h2>
+    <label>Pharmacist assessment
+      <div class="field-with-dictate"><textarea id="assessment" rows="2"></textarea><button type="button" class="mic-btn" data-target="assessment">&#127908;</button></div>
+      <p class="hint" style="margin:2px 0 6px 0;">Numbered as <strong>Issues</strong> in the CCMS note. If an issue is a reportable Pharmaceutical Care Issue, tick the box below and it also fills the PHIS PCI fields &mdash; no need to type it twice. Chips marked with a &#9878; carry a PHIS Type/Description and will set those dropdowns for you.</p>
+      <div class="phrase-bank" data-target="assessment">
+        <button type="button" class="phrase-btn">Glycaemic control above individualised target.</button>
+          <button type="button" class="phrase-btn">Glycaemic control at individualised target.</button>
+          <button type="button" class="phrase-btn">Improving trend since last visit.</button>
+          <button type="button" class="phrase-btn">No improvement since last visit.</button>
+          <button type="button" class="phrase-btn">Adherence is the main barrier to control.</button>
+          <button type="button" class="phrase-btn">Diet is the main barrier to control.</button>
+          <button type="button" class="phrase-btn">Injection technique is the main barrier to control.</button>
+          <button type="button" class="phrase-btn">Therapeutic inertia &mdash; regimen not intensified despite persistent above-target readings.</button>
+          <button type="button" class="phrase-btn">Over-basalisation &mdash; basal insulin escalated without addressing post-prandial excursions.</button>
+          <button type="button" class="phrase-btn">Hypoglycaemia limiting further intensification.</button>
+        <button type="button" class="phrase-btn">Drug-induced hyperglycaemia (corticosteroid) contributing to poor control.</button>
+        <button type="button" class="phrase-btn">Traditional/complementary medicine use contributing to poor control.</button>
+        <button type="button" class="phrase-btn">Dawn phenomenon contributing to fasting hyperglycaemia.</button>
+        <button type="button" class="phrase-btn">Somogyi phenomenon &mdash; rebound hyperglycaemia after nocturnal hypoglycaemia.</button>
+        <button type="button" class="phrase-btn">Intercurrent infection contributing to hyperglycaemia.</button>
+        <button type="button" class="phrase-btn">Faulty glucometer / expired strips confounding the SMBG record.</button>
+        <button type="button" class="phrase-btn">HbA1c and SMBG discordant &mdash; possible glycation gap, interpret HbA1c with caution.</button>
+      </div>
+      <p class="hint" style="margin:8px 0 2px 0;"><strong>&#9878; Reportable Pharmaceutical Care Issues</strong> &mdash; tapping one of these also sets the PHIS Type of Intervention and Description below.</p>
+      <div class="phrase-bank" data-target="assessment">
+        <button type="button" class="phrase-btn" data-pci-type="Incorrect/Inappropriate/Inadequate Regimen" data-pci-desc="Dose">&#9878; Insulin dose optimised/titrated based on the patient's SMBG readings.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Incorrect/Inappropriate/Inadequate Regimen" data-pci-desc="Dose">&#9878; Insulin dose sub-optimal for the SMBG pattern &mdash; up-titration indicated.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Incorrect/Inappropriate/Inadequate Regimen" data-pci-desc="Dose">&#9878; Insulin dose excessive for the SMBG pattern &mdash; reduction indicated (hypoglycaemia risk).</button>
+        <button type="button" class="phrase-btn" data-pci-type="Incorrect/Inappropriate/Inadequate Regimen" data-pci-desc="Frequency">&#9878; Insulin regimen frequency inappropriate for the glycaemic pattern.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Incorrect/Inappropriate/Inadequate Regimen" data-pci-desc="Dose">&#9878; Dose below the effective/maximum tolerated dose.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Incorrect/Inappropriate/Inadequate Regimen" data-pci-desc="Dose">&#9878; Dose not adjusted for current renal function.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Incorrect/Inappropriate/Inadequate Regimen" data-pci-desc="Drug">&#9878; Guideline-indicated agent not prescribed.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Inappropriate Prescription" data-pci-desc="Drug Interaction">&#9878; Clinically significant drug interaction.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Inappropriate Prescription" data-pci-desc="Polypharmacy">&#9878; Therapeutic duplication within the same class.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Inappropriate Prescription" data-pci-desc="Contraindication">&#9878; Medication contraindicated for this patient.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Miscellaneous" data-pci-desc="Suggest for Vital/Signs Monitoring/Laboratory Investigation">&#9878; Required monitoring parameter not done.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Miscellaneous" data-pci-desc="Drug Administration Error">&#9878; Incorrect administration technique or timing.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Miscellaneous" data-pci-desc="Others">&#9878; Adverse drug reaction suspected.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Miscellaneous" data-pci-desc="Drug Not In Formulary">&#9878; Required agent not available in this facility's formulary.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Incomplete Prescriptions" data-pci-desc="Dose">&#9878; Prescription incomplete &mdash; dose not stated.</button>
+        <button type="button" class="phrase-btn" data-pci-type="Incomplete Prescriptions" data-pci-desc="Duration">&#9878; Prescription incomplete &mdash; duration not stated.</button>
+      </div>
+    </label>
+    <label>Intervention / counselling done today
+      <div class="field-with-dictate"><textarea id="interventionCounselling" rows="2"></textarea><button type="button" class="mic-btn" data-target="interventionCounselling">&#127908;</button></div>
+      <div class="phrase-bank" data-target="interventionCounselling">
+        <button type="button" class="phrase-btn">Reinforced medication adherence.</button>
+        <button type="button" class="phrase-btn">Re-counselled on indication, dose and timing of each medication.</button>
+        <button type="button" class="phrase-btn">Demonstrated and corrected insulin injection technique.</button>
+        <button type="button" class="phrase-btn">Counselled on site rotation to prevent lipohypertrophy.</button>
+        <button type="button" class="phrase-btn">Counselled on hypoglycaemia recognition and the Rule of 15.</button>
+        <button type="button" class="phrase-btn">Counselled on SMBG technique and recording in a diary.</button>
+        <button type="button" class="phrase-btn">Counselled on carbohydrate portion control.</button>
+        <button type="button" class="phrase-btn">Counselled on sick-day rules.</button>
+        <button type="button" class="phrase-btn">Provided written/pictorial medication schedule.</button>
+        <button type="button" class="phrase-btn">Simplified regimen discussed with the prescriber.</button>
+      </div>
+    </label>
+    <label>Pharmaceutical care plan
+      <div class="field-with-dictate"><textarea id="carePlan" rows="2"></textarea><button type="button" class="mic-btn" data-target="carePlan">&#127908;</button></div>
+    </label>
+    <div class="phrase-bank" data-target="carePlan">
+      <button type="button" class="phrase-btn">Continue current regimen and reassess next visit.</button>
+      <button type="button" class="phrase-btn">Reinforce adherence before medication intensification.</button>
+      <button type="button" class="phrase-btn">Discuss with MO/FMS if persistently uncontrolled.</button>
+      <button type="button" class="phrase-btn">Review SMBG and adherence next visit.</button>
+      <button type="button" class="phrase-btn">Patient empowered to self-adjust insulin dose at home; to discuss with physician if concerns arise.</button>
+      <button type="button" class="phrase-btn">Referral made to other healthcare provider.</button>
+      <button type="button" class="phrase-btn">Continue appointments until glycaemic and other laboratory parameters achieve individualised targets.</button>
+    </div>
+    <div class="subsection" id="pciSection">
+      <h3>Pharmaceutical Care Issues <span class="hint" style="font-weight:400;">(PHIS note only)</span></h3>
+      <p class="hint">PHIS records <strong>one</strong> Pharmaceutical Care Issue per entry, so add one card per issue. Tapping a &#9878; chip in the Issues field above creates a card for you, pre-filled with the issue text and the matching PHIS Type of Intervention and Description. Cards without a Type are ignored, and if there are no cards the PCI block is left out of the note entirely.</p>
+      <div id="pciList"></div>
+      <p class="hint" id="pciEmptyNote">No Pharmaceutical Care Issue recorded this visit.</p>
+      <button type="button" id="pciAddBtn" class="secondary-btn">&#43; Add Pharmaceutical Care Issue</button>
+    </div>
+
+    <label>Referral / discussion with MO or FMS
+      <div class="field-with-dictate"><textarea id="referralDiscussion" rows="2"></textarea><button type="button" class="mic-btn" data-target="referralDiscussion">&#127908;</button></div>
+      <div class="phrase-bank" data-target="referralDiscussion">
+        <button type="button" class="phrase-btn">Nil required this visit.</button>
+        <button type="button" class="phrase-btn">Discussed with MO &mdash; recommendation accepted.</button>
+        <button type="button" class="phrase-btn">Discussed with FMS &mdash; recommendation accepted.</button>
+        <button type="button" class="phrase-btn">Recommendation documented for the next clinic review.</button>
+        <button type="button" class="phrase-btn">Referred for diabetic retinal screening.</button>
+        <button type="button" class="phrase-btn">Referred for diabetic foot assessment.</button>
+        <button type="button" class="phrase-btn">Referred to nephrology / suggested nephrology input.</button>
+        <button type="button" class="phrase-btn">Suggested repeat/additional laboratory investigation.</button>
+      </div>
+      <p class="hint" style="margin:10px 0 2px 0;"><strong>Dietitian / physiotherapy referral</strong> (SENARAI SEMAK 7.6 &mdash; BMI assessment and lifestyle modification, including referral to dietetics and physiotherapy where indicated)</p>
+      <div id="dieteticReferralGroup">
+        <label class="audit-item"><input type="checkbox" id="refDietitian"> Referred to <strong>dietitian</strong></label>
+        <label class="audit-item"><input type="checkbox" id="refPhysio"> Referred to <strong>physiotherapy</strong></label>
+        <label class="audit-item"><input type="checkbox" id="refNotIndicated"> Assessed &mdash; dietitian/physiotherapy referral not indicated this visit</label>
+      </div>
+      <label>Referral detail / reason (optional)
+        <div class="field-with-dictate"><input type="text" id="dieteticReferralDetail" placeholder="e.g. for intensive MNT, weight-loss target 10% in 6 months"><button type="button" class="mic-btn" data-target="dieteticReferralDetail">&#127908;</button></div>
+        <div class="phrase-bank" data-target="dieteticReferralDetail" data-sep="; ">
+          <button type="button" class="phrase-btn">For intensive medical nutrition therapy</button>
+          <button type="button" class="phrase-btn">For weight-loss support</button>
+          <button type="button" class="phrase-btn">For exercise prescription</button>
+          <button type="button" class="phrase-btn">Patient declined referral</button>
+          <button type="button" class="phrase-btn">Already under dietitian follow-up</button>
+        </div>
+      </label>
+    </label>
+
+    <div class="subsection">
+      <h3>PHIS Reporting (PHIS note only)</h3>
+      <p class="hint">Mirrors the PHIS MTAC Reporting &rarr; Reporting block. Not added to the CCMS note.</p>
+      <div class="grid grid-2">
+        <label>Understanding (%)
+          <input type="number" id="reportingUnderstanding" min="0" max="100" step="1" placeholder="e.g. 80">
+        </label>
+        <label>Adherence score
+          <div class="field-with-dictate"><input type="text" id="reportingAdherenceScore" placeholder="e.g. 50/60, moderate-poor adherence"><button type="button" class="mic-btn" data-target="reportingAdherenceScore">&#127908;</button></div>
+        </label>
+      </div>
+      <p class="hint">MTAC Status is derived automatically for the PHIS note: <strong>Need Follow Up</strong> by default, <strong>Discharged</strong> if "Discharged from DMTAC" below is ticked, or omitted if "Counselled but Not recruited into MTAC" is ticked.</p>
+    </div>
+
+    <div class="full">
+      <label class="audit-item"><input type="checkbox" id="notRecruited"> Counselled but Not recruited into MTAC</label>
+      <p class="hint" style="margin:2px 0 6px 24px;">Patient was counselled and this visit is reported, but not enrolled as a recruited DMTAC follow-up patient.</p>
+      <div id="notRecruitedReasons" class="audit-group" style="display:none; margin-left:24px;">
+        <p class="hint" style="margin:0 0 4px 0;">Reason(s) &mdash; select all that apply:</p>
+        <label class="audit-item"><input type="checkbox" class="notRecruitedReason" value="Patient unable to attend clinic during medication collection"> Patient unable to attend clinic during medication collection</label>
+        <label class="audit-item"><input type="checkbox" class="notRecruitedReason" value="Logistic issue"> Logistic issue</label>
+        <label class="audit-item"><input type="checkbox" class="notRecruitedReason" value="Not fulfilling MTAC recruitment criteria"> Not fulfilling MTAC recruitment criteria</label>
+        <label class="audit-item"><input type="checkbox" class="notRecruitedReason" value="HbA1c < 10%"> HbA1c &lt; 10%</label>
+        <label class="audit-item"><input type="checkbox" class="notRecruitedReason" value="Insulin technique issue not requiring multiple MTAC follow-up"> Insulin technique issue not requiring multiple MTAC follow-up</label>
+        <label class="audit-item"><input type="checkbox" id="notRecruitedOtherCheck" class="notRecruitedReason" value="__other__"> Other (specify):</label>
+        <div class="field-with-dictate"><input type="text" id="notRecruitedOtherText" aria-label="Other reason for not recruiting" placeholder="Specify other reason" style="margin:4px 0 0 24px; width: calc(100% - 24px);"><button type="button" class="mic-btn" data-target="notRecruitedOtherText">&#127908;</button></div>
+      </div>
+    </div>
+    <div class="full">
+      <label class="audit-item"><input type="checkbox" id="dischargedDmtac"> Discharged from DMTAC</label>
+      <p class="hint" style="margin:2px 0 6px 24px;">Patient is being discharged from DMTAC follow-up as of this visit.</p>
+      <div id="dischargeReasonPanel" class="audit-group" style="display:none; margin-left:24px;">
+        <label>Reason for discharge
+          <div class="field-with-dictate"><input type="text" id="dischargeReason" placeholder="e.g. Therapeutic targets achieved and stable, transferred to another facility"><button type="button" class="mic-btn" data-target="dischargeReason">&#127908;</button></div>
+        </label>
+        <div class="phrase-bank" data-target="dischargeReason">
+          <button type="button" class="phrase-btn">Achieved individualised HbA1c target for at least one reading.</button>
+          <button type="button" class="phrase-btn">Completed a minimum of 4 visits with DFIT 100% and good adherence (MyMAAT &ge;50).</button>
+          <button type="button" class="phrase-btn">Defaulted 6 months / 3 consecutive DMTAC visits.</button>
+          <button type="button" class="phrase-btn">Discharged / transferred to another facility for follow-up.</button>
+          <button type="button" class="phrase-btn">Patient requested to terminate DMTAC follow-up.</button>
+        </div>
+        <p class="hint">Discharge criteria per the local <strong>PROTOCOL FACILITY DMTAC (PKD SPT, v2.0, 20.1.25)</strong>: HbA1c target achieved for &ge;1 reading, OR &ge;4 visits with DFIT 100% and good adherence, OR defaulted 6 months/3 consecutive visits, OR discharged/transferred, OR patient request to terminate. <em>Note:</em> the national <strong>DMTAC Protocol (KKM, 3rd Ed. 2022)</strong> requires &ge;2 consecutive readings at target instead of 1, and doesn't include "patient request to terminate" as a discharge criterion &mdash; this app follows the local PKD SPT wording since that's this facility's own protocol.</p>
+      </div>
+    </div>
+    <div class="grid grid-2">
+      <label>Follow-up date / timeframe
+        <div class="field-with-dictate"><input type="text" id="followUpDate" placeholder="e.g. 3 months"><button type="button" class="mic-btn" data-target="followUpDate">&#127908;</button></div>
+        <div class="phrase-bank" data-target="followUpDate" data-mode="replace" id="followUpDateBank">
+          <button type="button" class="phrase-btn">1 month</button>
+          <button type="button" class="phrase-btn">2 months</button>
+          <button type="button" class="phrase-btn">3 months</button>
+          <button type="button" class="phrase-btn">2 weeks</button>
+          <button type="button" class="phrase-btn">1 week</button>
+          <button type="button" class="phrase-btn">With next clinic appointment</button>
+        </div>
+      </label>
+      <label>Next DMTAC visit (TCA)
+        <input type="date" id="nextTcaDate">
+      </label>
+      <div class="full">
+        <p id="nextTcaHint" class="hint" style="display:none; margin:2px 0 6px 0;"></p>
+      </div>
+      <label>Items to review next visit
+        <div class="field-with-dictate"><input type="text" id="followUpItems" placeholder="e.g. HbA1c, SMBG diary, insulin technique"><button type="button" class="mic-btn" data-target="followUpItems">&#127908;</button></div>
+        <div class="phrase-bank" data-target="followUpItems" data-sep=", ">
+          <button type="button" class="phrase-btn">HbA1c</button>
+          <button type="button" class="phrase-btn">SMBG diary</button>
+          <button type="button" class="phrase-btn">Adherence (MyMAAT)</button>
+          <button type="button" class="phrase-btn">Insulin technique</button>
+          <button type="button" class="phrase-btn">Injection sites / lipohypertrophy</button>
+          <button type="button" class="phrase-btn">Hypoglycaemia episodes</button>
+          <button type="button" class="phrase-btn">Renal profile (SrCreat/eGFR)</button>
+          <button type="button" class="phrase-btn">UACR</button>
+          <button type="button" class="phrase-btn">Lipid profile</button>
+          <button type="button" class="phrase-btn">Potassium</button>
+          <button type="button" class="phrase-btn">BP</button>
+          <button type="button" class="phrase-btn">Weight / BMI</button>
+          <button type="button" class="phrase-btn">Response to dose adjustment</button>
+        </div>
+      </label>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section class="card">
+    <h2>Dictation Settings</h2>
+    <label>Dictation language
+      <select id="dictationLang">
+        <option value="en-MY">English (Malaysia)</option>
+        <option value="ms-MY">Bahasa Malaysia</option>
+        <option value="en-US">English (US)</option>
+      </select>
+    </label>
+    <p id="dictationSupportNote" class="hint"></p>
+  </section>
+
+  <!-- ============ GENERATE NOTE ============ -->
+  <section class="card">
+    <h2>Generate Note</h2>
+    <p class="hint">Keep notes clear, concise, specific and objective. Avoid personal opinions, vague descriptions, and non-standard abbreviations &mdash; the note should read well to another healthcare professional.</p>
+    <p class="hint"><strong>Full DMTAC Note</strong> = for PHIS, structured to follow the PHIS MTAC Reporting screen (Assessment / Specific Details / Reporting / Pharmaceutical Care Issue), plus the flipchart entry and Audit-Required Checklist for audit. <strong>Short CCMS Note</strong> = for CCMS, a plain-language clinical narrative for MO/FMS communication &mdash; no flipchart entry, audit checklist, or PCI block, and no SOAP-style labels.</p>
+    <div class="button-row">
+      <button type="button" id="generateFullNote" class="primary-btn">Generate Full DMTAC Note (PHIS)</button>
+      <button type="button" id="generateShortNote" class="primary-btn">Generate Short CCMS Note (CCMS)</button>
+    </div>
+    <textarea id="noteOutput" aria-label="Generated note output" rows="16" readonly placeholder="Generated note will appear here."></textarea>
+
+    <div class="button-row">
+      <button type="button" id="copyNoteBtn" class="primary-btn">Copy Note</button>
+      <button type="button" id="clearAllBtn" class="danger-btn">Clear All</button>
+    </div>
+    <p id="copyStatus" class="hint"></p>
+  </section>
+
+</main>
+
+<div id="printSignature">
+  <p style="margin:14pt 0 6pt 0; font-size:9pt; color:#444;">Printed record &mdash; MTAC pharmacist on duty (ADAF F1.2 / SENARAI SEMAK 4.3):</p>
+  <table style="width:100%; border-collapse:collapse; font-size:9pt;">
+    <tr>
+      <td style="width:45%; padding-top:22pt; border-bottom:0.75pt solid #000;"></td>
+      <td style="width:10%;"></td>
+      <td style="width:45%; padding-top:22pt; border-bottom:0.75pt solid #000;"></td>
+    </tr>
+    <tr>
+      <td style="padding-top:3pt;">Name, signature &amp; stamp</td>
+      <td></td>
+      <td style="padding-top:3pt;">Date / time</td>
+    </tr>
+  </table>
+</div>
+
+<footer>
+  <p>Local, offline documentation scaffold. Does not record consultations, diagnose, recommend medication changes, or connect to CCMS/PHIS/any external service. Pharmacist verification is required before use.</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.vscode/
+.idea/
+.Rhistory
+
+# Never commit secrets. The Gemini API key belongs ONLY in the Cloudflare
+# Worker's encrypted secrets, never in this repository.
+.env
+.env.*
+*.key
+secrets.json
+wrangler.toml
+
+# Working files that should not ship with the site
+node_modules/
+test_*.js
+*.log
+tmp/
+check_*.png
